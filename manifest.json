@@ -9,7 +9,7 @@
       "name": "Sincord contributors"
     }
   ],
-  "main": "index.js",
+  "main": "https://raw.githubusercontent.com/BypassHub-EX/fake-profile/main/index.js",
   "vendetta": {
     "icon": "ic_profile_24px"
   }
