@@ -1,0 +1,16 @@
+{
+  "name": "FakeProfile Kettu Full Attempt",
+  "description": "Full Sincord fakeProfile source bundle with Kettu manifest. Port attempt, not guaranteed plug-and-play.",
+  "authors": [
+    {
+      "name": "Xohus"
+    },
+    {
+      "name": "Sincord contributors"
+    }
+  ],
+  "main": "index.js",
+  "vendetta": {
+    "icon": "ic_profile_24px"
+  }
+}
