@@ -1,16 +1,1 @@
-{
-  "name": "FakeProfile Kettu Full Attempt",
-  "description": "Full Sincord fakeProfile source bundle with Kettu manifest. Port attempt, not guaranteed plug-and-play.",
-  "authors": [
-    {
-      "name": "Xohus"
-    },
-    {
-      "name": "Sincord contributors"
-    }
-  ],
-  "main": "https://raw.githubusercontent.com/BypassHub-EX/fake-profile/main/index.js",
-  "vendetta": {
-    "icon": "ic_profile_24px"
-  }
-}
+{"name":"FakeProfile Kettu Full Attempt","description":"Full Sincord fakeProfile source bundle with Kettu manifest. Port attempt, not guaranteed plug-and-play.","authors":[{"name":"Xohus"},{"name":"Sincord contributors"}],"main":"index.js","vendetta":{"icon":"ic_profile_24px"},"hash":"f01dee0e27a6d7a21ac1962fb540953b3c591fe3803a352d74f2afdeb4581669"}
