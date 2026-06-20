@@ -1,1 +1,1 @@
-{"name":"Fake Profile All Badges","description":"Local profile changer with all badges except Staff and Partner.","authors":[{"name":"Xohus"}],"main":"index.js","vendetta":{"icon":"ic_profile_24px"},"hash":"c9b7c0a003b5baebd13f42c9569da4521bcebc6991e46a241f5b7283ec750043"}
+{"name":"Fake Profile Select Badges","description":"Local profile changer with selectable badges and fixed text input.","authors":[{"name":"Xohus"}],"main":"index.js","vendetta":{"icon":"ic_profile_24px"},"hash":"c120d60572a7852d6ce059b6d0e8e9755e35a83d76f424bf562e9195860e5270"}
