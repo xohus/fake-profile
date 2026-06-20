@@ -1,1 +1,1 @@
-{"name":"Fake Profile Select Badges","description":"Local profile changer with selectable badges and fixed text input.","authors":[{"name":"Xohus"}],"main":"index.js","vendetta":{"icon":"ic_profile_24px"},"hash":"aeeaa1e22b54b7ca1750bd636f320cf51d40caba562241d8e97b36e9046b23ff
+{"name":"Fake Profile Replace Mode","description":"Selectable badges with replace mode to hide owned badges.","authors":[{"name":"Xohus"}],"main":"index.js","vendetta":{"icon":"ic_profile_24px"}}
