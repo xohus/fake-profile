@@ -15,7 +15,6 @@
   storage.hiddenExtras ??= {};
   storage.replaceMode ??= true;
 
-
   const FLAG_BADGES = [
     ["hypesquad", "HypeSquad Events", 4],
     ["bug1", "Bug Hunter 1", 8],
@@ -40,7 +39,6 @@
     ["vdev_icon", "Verified Developer", "https://cdn.discordapp.com/badge-icons/6df5892e0f35b051f8b61eace34f4967.png"],
     ["mod_icon", "Former Moderator", "https://cdn.discordapp.com/badge-icons/fee1624003e2fee35cb398e125dc479b.png"],
     ["active_icon", "Active Developer", "https://cdn.discordapp.com/badge-icons/6bdc42827a38498929a4920da12695d9.png"],
-
     ["old_username", "Originally Known As", "https://cdn.discordapp.com/badge-icons/6de6d34650760ba5551a79732e98ed60.png"],
     ["quest", "Completed a Quest", "https://cdn.discordapp.com/badge-icons/7d9ae358c8c5e118768335dbe68b4fb8.png"],
     ["orbs", "Orbs Apprentice", "https://cdn.discordapp.com/badge-icons/83d8a1eb09a8d64e59233eec5d4d5c2d.png"],
@@ -66,6 +64,20 @@
 
   let unpatches = [];
   let myId = null;
+
+  let cacheVersion = 0;
+  let cachedUser = null;
+  let cachedUserVersion = -1;
+  let cachedProfile = null;
+  let cachedProfileVersion = -1;
+
+  function clearFakeCache() {
+    cacheVersion++;
+    cachedUser = null;
+    cachedProfile = null;
+    cachedUserVersion = -1;
+    cachedProfileVersion = -1;
+  }
 
   function safeStore(name) {
     try { return metro.findByStoreName?.(name) || metro.findByStoreNameLazy?.(name); }
@@ -129,12 +141,13 @@
 
     const display = storage.displayName || original?.globalName || original?.displayName || original?.username || "Badge Collector";
     const username = storage.username || original?.username || "badgecollector";
+    const flags = withBadges(original?.publicFlags ?? original?.flags ?? obj.publicFlags ?? obj.flags);
 
     try { obj.username = username; } catch {}
     try { obj.globalName = display; } catch {}
     try { obj.displayName = display; } catch {}
-    try { obj.publicFlags = withBadges(original?.publicFlags ?? obj.publicFlags); } catch {}
-    try { obj.flags = withBadges(original?.flags ?? obj.flags); } catch {}
+    try { obj.publicFlags = flags; } catch {}
+    try { obj.flags = flags; } catch {}
     try { obj.badges = extraBadgeObjects(original?.badges ?? obj.badges); } catch {}
     try { obj.profileBadges = extraBadgeObjects(original?.profileBadges ?? obj.profileBadges); } catch {}
 
@@ -144,74 +157,144 @@
       try { obj.premiumGuildSince = oldDate(24); } catch {}
     }
 
-    try {
-      Object.defineProperty(obj, "username", { get: () => username, configurable: true });
-      Object.defineProperty(obj, "globalName", { get: () => display, configurable: true });
-      Object.defineProperty(obj, "displayName", { get: () => display, configurable: true });
-      Object.defineProperty(obj, "publicFlags", { get: () => withBadges(original?.publicFlags), configurable: true });
-      Object.defineProperty(obj, "flags", { get: () => withBadges(original?.flags), configurable: true });
-      Object.defineProperty(obj, "badges", { get: () => extraBadgeObjects(original?.badges), configurable: true });
-      Object.defineProperty(obj, "profileBadges", { get: () => extraBadgeObjects(original?.profileBadges), configurable: true });
-      if (storage.nitroEnabled) {
-        Object.defineProperty(obj, "premiumType", { get: () => 2, configurable: true });
-        Object.defineProperty(obj, "premiumSince", { get: () => oldDate(72), configurable: true });
-        Object.defineProperty(obj, "premiumGuildSince", { get: () => oldDate(24), configurable: true });
-      }
-    } catch {}
+    try { obj.hasFlag = flag => !!(flags & flag); } catch {}
 
-    try { obj.hasFlag = flag => !!(withBadges(original?.publicFlags || original?.flags || 0) & flag); } catch {}
     return obj;
   }
 
-  function cloneObject(original) {
-    if (!original || !storage.enabled) return original;
+  function makeFastClone(original) {
     try {
-      const clone = Object.create(Object.getPrototypeOf(original));
-      for (const key of Reflect.ownKeys(original)) {
-        try {
-          const desc = Object.getOwnPropertyDescriptor(original, key);
-          if (desc) Object.defineProperty(clone, key, desc);
-        } catch {}
-      }
-      return applyFake(clone, original);
+      return Object.assign(Object.create(Object.getPrototypeOf(original)), original);
     } catch {
-      return applyFake({ ...original }, original);
+      try { return { ...original }; }
+      catch { return {}; }
     }
+  }
+
+  function cloneObject(original, type) {
+    if (!original || !storage.enabled) return original;
+
+    if (type === "user" && cachedUser && cachedUserVersion === cacheVersion) return cachedUser;
+    if (type === "profile" && cachedProfile && cachedProfileVersion === cacheVersion) return cachedProfile;
+
+    const fake = applyFake(makeFastClone(original), original);
+
+    if (type === "user") {
+      cachedUser = fake;
+      cachedUserVersion = cacheVersion;
+    } else if (type === "profile") {
+      cachedProfile = fake;
+      cachedProfileVersion = cacheVersion;
+    }
+
+    return fake;
   }
 
   function cloneUser(user) {
     if (!user || !storage.enabled) return user;
-    try { if (myId && user.id !== myId) return user; } catch {}
-    return cloneObject(user);
+
+    try {
+      if (myId && user.id !== myId) return user;
+    } catch {}
+
+    return cloneObject(user, "user");
   }
 
   function cloneProfile(profile, userId) {
     if (!profile || !storage.enabled) return profile;
-    try { if (myId && userId && userId !== myId) return profile; } catch {}
-    return cloneObject(profile);
+
+    try {
+      if (myId && userId && userId !== myId) return profile;
+    } catch {}
+
+    return cloneObject(profile, "profile");
   }
 
   function patchStores() {
     const UserStore = safeStore("UserStore") || metro.findByProps?.("getCurrentUser", "getUser");
+
     if (UserStore) {
       try { myId = UserStore.getCurrentUser?.()?.id || myId; } catch {}
-      try { if (UserStore.getCurrentUser) unpatches.push(api.patcher.instead("getCurrentUser", UserStore, (a, o) => cloneUser(o(...a)))); } catch {}
-      try { if (UserStore.getUser) unpatches.push(api.patcher.instead("getUser", UserStore, (a, o) => cloneUser(o(...a)))); } catch {}
+
+      try {
+        if (UserStore.getCurrentUser) {
+          unpatches.push(api.patcher.instead("getCurrentUser", UserStore, (a, o) => {
+            const user = o(...a);
+            try { myId = user?.id || myId; } catch {}
+            return cloneUser(user);
+          }));
+        }
+      } catch {}
+
+      try {
+        if (UserStore.getUser) {
+          unpatches.push(api.patcher.instead("getUser", UserStore, (a, o) => {
+            const wantedId = a?.[0];
+
+            if (myId && wantedId && wantedId !== myId) {
+              return o(...a);
+            }
+
+            if (!myId && wantedId) {
+              return o(...a);
+            }
+
+            return cloneUser(o(...a));
+          }));
+        }
+      } catch {}
     }
 
     const ProfileStore = safeStore("UserProfileStore") || metro.findByProps?.("getUserProfile", "getGuildMemberProfile");
+
     if (ProfileStore) {
-      try { if (ProfileStore.getUserProfile) unpatches.push(api.patcher.instead("getUserProfile", ProfileStore, (a, o) => cloneProfile(o(...a), a?.[0]))); } catch {}
-      try { if (ProfileStore.getGuildMemberProfile) unpatches.push(api.patcher.instead("getGuildMemberProfile", ProfileStore, (a, o) => cloneProfile(o(...a), a?.[0]))); } catch {}
+      try {
+        if (ProfileStore.getUserProfile) {
+          unpatches.push(api.patcher.instead("getUserProfile", ProfileStore, (a, o) => {
+            const userId = a?.[0];
+
+            if (myId && userId && userId !== myId) {
+              return o(...a);
+            }
+
+            if (!myId && userId) {
+              return o(...a);
+            }
+
+            return cloneProfile(o(...a), userId);
+          }));
+        }
+      } catch {}
+
+      try {
+        if (ProfileStore.getGuildMemberProfile) {
+          unpatches.push(api.patcher.instead("getGuildMemberProfile", ProfileStore, (a, o) => {
+            const userId = a?.[0];
+
+            if (myId && userId && userId !== myId) {
+              return o(...a);
+            }
+
+            if (!myId && userId) {
+              return o(...a);
+            }
+
+            return cloneProfile(o(...a), userId);
+          }));
+        }
+      } catch {}
     }
   }
 
   function refreshDiscord() {
+    clearFakeCache();
+
     try { (safeStore("UserStore") || metro.findByProps?.("getCurrentUser", "getUser"))?.emitChange?.(); } catch {}
     try { (safeStore("UserProfileStore") || metro.findByProps?.("getUserProfile", "getGuildMemberProfile"))?.emitChange?.(); } catch {}
+
     try {
       const Dispatcher = metro.findByProps?.("dispatch", "subscribe");
-      Dispatcher?.dispatch?.({ type: "USER_UPDATE", user: {} });
+      Dispatcher?.dispatch?.({ type: "USER_UPDATE", user: { id: myId } });
       Dispatcher?.dispatch?.({ type: "USER_PROFILE_UPDATE", userId: myId });
       Dispatcher?.dispatch?.({ type: "CURRENT_USER_UPDATE" });
     } catch {}
@@ -222,10 +305,12 @@
 
     const set = (key, value) => {
       storage[key] = value;
+      clearFakeCache();
       forceUpdate();
     };
 
     const apply = () => {
+      clearFakeCache();
       forceUpdate();
       refreshDiscord();
     };
@@ -244,7 +329,10 @@
         defaultValue: String(storage[keyName] ?? ""),
         placeholder,
         placeholderTextColor: "#777",
-        onChangeText: text => { storage[keyName] = text; },
+        onChangeText: text => {
+          storage[keyName] = text;
+          clearFakeCache();
+        },
         autoCorrect: false,
         autoCapitalize: "none",
         editable: true,
@@ -254,24 +342,28 @@
 
     const toggleFlag = id => {
       storage.selectedFlags = { ...(storage.selectedFlags || {}), [id]: !storage.selectedFlags?.[id] };
+      clearFakeCache();
       forceUpdate();
       refreshDiscord();
     };
 
     const toggleExtra = id => {
       storage.selectedExtras = { ...(storage.selectedExtras || {}), [id]: !storage.selectedExtras?.[id] };
+      clearFakeCache();
       forceUpdate();
       refreshDiscord();
     };
 
     const toggleHiddenFlag = id => {
       storage.hiddenFlags = { ...(storage.hiddenFlags || {}), [id]: !storage.hiddenFlags?.[id] };
+      clearFakeCache();
       forceUpdate();
       refreshDiscord();
     };
 
     const toggleHiddenExtra = id => {
       storage.hiddenExtras = { ...(storage.hiddenExtras || {}), [id]: !storage.hiddenExtras?.[id] };
+      clearFakeCache();
       forceUpdate();
       refreshDiscord();
     };
@@ -303,10 +395,14 @@
   }
 
   const index = {
-    onLoad() { patchStores(); refreshDiscord(); },
+    onLoad() {
+      patchStores();
+      refreshDiscord();
+    },
     onUnload() {
       for (const unpatch of unpatches) try { unpatch?.(); } catch {}
       unpatches = [];
+      clearFakeCache();
       refreshDiscord();
     },
     settings: Settings
