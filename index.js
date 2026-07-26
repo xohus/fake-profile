@@ -511,7 +511,7 @@
     );
 
     const MediaField = ({ label, keyName, banner = false }) => {
-      const [error, setError] = React.useState("");
+      const [error, setError] = React.useReducer((_current, next) => next, "");
       const media = mediaValue(keyName);
       const previewUri = mediaUri(keyName);
       const displayName = String(media?.fileName || "Selected image");
@@ -628,7 +628,11 @@
 
   const index = {
     onLoad() {
-      patchStores();
+      try {
+        patchStores();
+      } catch (error) {
+        console.error("[FakeProfile] Some preview hooks are unavailable in this Discord build:", error);
+      }
     },
     onUnload() {
       for (const unpatch of unpatches) try { unpatch?.(); } catch {}

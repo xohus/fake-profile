@@ -166,4 +166,25 @@ assert.equal(IconUtils.getUserAvatarURL(currentUser), `real-avatar:${currentUser
 assert.equal(IconUtils.getUserAvatarSource(currentUser).uri, `real-avatar-source:${currentUser.id}`);
 assert.equal(BannerUtils.getUserBannerURL(currentUser.id), `real-banner:${currentUser.id}`);
 
+const hostileContext = {
+  bunny: {
+    metro: {
+      common: { React, ReactNative },
+      findByStoreName() {
+        throw new Error("unsupported store lookup");
+      },
+      findByProps() {
+        throw new Error("unsupported module lookup");
+      }
+    },
+    utils: { lazy: {} },
+    api: { patcher }
+  },
+  vendetta: { plugin: { storage: {} } },
+  console: { error() {} }
+};
+const hostileModule = vm.runInNewContext(readFileSync("index.js", "utf8"), hostileContext);
+assert.doesNotThrow(() => hostileModule.default.onLoad(), "unsupported modules must not block plugin activation");
+assert.doesNotThrow(() => hostileModule.default.settings(), "settings must render even when preview hooks are unavailable");
+
 console.log("Verified local-only cloning, native media pickers, stable avatar/banner resolvers, scoping, and cleanup.");

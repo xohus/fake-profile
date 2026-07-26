@@ -50,7 +50,8 @@ for (const feature of [
   '"Profile banner"',
   '"Choose photo / GIF"',
   '"Choose file"',
-  '"ANIMATED GIF"'
+  '"ANIMATED GIF"',
+  '"[FakeProfile] Some preview hooks are unavailable'
 ]) {
   if (!entrypoint.includes(feature)) fail(`missing preview feature marker: ${feature}`);
 }
