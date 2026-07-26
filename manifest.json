@@ -1,1 +1,14 @@
-{"name":"FakeProfile","description":"Larp and change your profile icons..","authors":[{"name":"xohus"}],"main":"index.js","vendetta":{"icon":"ic_profile_24px"},"hash":"7f8435638932bf1db8fc9d2c5fe1e158aaaf5b5df6facf70bcea15b31e0d3666"}
+{
+  "name": "FakeProfile",
+  "description": "Locally preview a custom profile, including animated GIF avatars and banners, without changing Discord account data.",
+  "authors": [
+    {
+      "name": "xohus"
+    }
+  ],
+  "main": "index.js",
+  "vendetta": {
+    "icon": "ic_profile_24px"
+  },
+  "hash": "2851ca559967806285746242ccf80eba5cbdd14351dbf3eda155a9942141e7a1"
+}

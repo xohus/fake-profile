@@ -6,8 +6,10 @@
   const storage = plugin.storage;
 
   storage.enabled ??= false;
-  storage.displayName ??= "Badge Collector";
-  storage.username ??= "badgecollector";
+  storage.displayName ??= "Fake Profile";
+  storage.username ??= "fakeprofile";
+  storage.avatarUrl ??= "";
+  storage.bannerUrl ??= "";
   storage.nitroEnabled ??= true;
   storage.selectedFlags ??= {};
   storage.selectedExtras ??= {};
@@ -81,6 +83,23 @@
     const d = new Date();
     d.setMonth(d.getMonth() - months);
     return d;
+  }
+
+  function mediaUrl(key) {
+    const value = String(storage[key] || "").trim();
+    if (!value) return "";
+
+    return /^(https?:\/\/|data:image\/)/i.test(value) ? value : "";
+  }
+
+  function isCurrentUser(user) {
+    if (!user) return false;
+    try {
+      const userId = typeof user === "string" ? user : user.id;
+      return !!myId && !!userId && userId === myId;
+    } catch {
+      return false;
+    }
   }
 
   function selectedFlagMask() {
@@ -166,6 +185,22 @@
     setOwnValue(obj, "flags", flags);
     setOwnValue(obj, "badges", extraBadgeObjects(original?.badges ?? obj.badges));
     setOwnValue(obj, "profileBadges", extraBadgeObjects(original?.profileBadges ?? obj.profileBadges));
+
+    const avatarUrl = mediaUrl("avatarUrl");
+    const bannerUrl = mediaUrl("bannerUrl");
+
+    if (avatarUrl) {
+      setOwnValue(obj, "avatarURL", avatarUrl);
+      setOwnValue(obj, "avatarUrl", avatarUrl);
+      setOwnValue(obj, "getAvatarURL", () => avatarUrl);
+    }
+
+    if (bannerUrl) {
+      setOwnValue(obj, "banner", bannerUrl);
+      setOwnValue(obj, "bannerURL", bannerUrl);
+      setOwnValue(obj, "bannerUrl", bannerUrl);
+      setOwnValue(obj, "getBannerURL", () => bannerUrl);
+    }
 
     if (storage.nitroEnabled) {
       setOwnValue(obj, "premiumType", 2);
@@ -292,6 +327,28 @@
         }
       } catch {}
     }
+
+    const IconUtils = metro.findByProps?.("getUserAvatarURL");
+
+    try {
+      if (IconUtils?.getUserAvatarURL) {
+        unpatches.push(api.patcher.instead("getUserAvatarURL", IconUtils, (a, o) => {
+          const avatarUrl = mediaUrl("avatarUrl");
+          return storage.enabled && avatarUrl && isCurrentUser(a?.[0]) ? avatarUrl : o(...a);
+        }));
+      }
+    } catch {}
+
+    const BannerUtils = metro.findByProps?.("getUserBannerURL");
+
+    try {
+      if (BannerUtils?.getUserBannerURL) {
+        unpatches.push(api.patcher.instead("getUserBannerURL", BannerUtils, (a, o) => {
+          const bannerUrl = mediaUrl("bannerUrl");
+          return storage.enabled && bannerUrl && isCurrentUser(a?.[0]) ? bannerUrl : o(...a);
+        }));
+      }
+    } catch {}
   }
 
   function refreshDiscord() {
@@ -347,6 +404,58 @@
       })
     );
 
+    const MediaField = ({ label, keyName, placeholder, banner = false }) => {
+      const value = String(storage[keyName] || "");
+      const previewUrl = mediaUrl(keyName);
+      const isGif = /\.gif(?:$|[?#])/i.test(previewUrl) || /^data:image\/gif/i.test(previewUrl);
+
+      return React.createElement(RN.View, { style: { marginBottom: 16 } },
+        React.createElement(RN.Text, { style: { color: "#fff", fontSize: 14, fontWeight: "800", marginBottom: 4 } }, label),
+        React.createElement(RN.Text, { style: { color: "#aaa", fontSize: 12, lineHeight: 17, marginBottom: 8 } },
+          "Paste an HTTPS image or GIF URL. It is rendered only in your local fake-profile preview."
+        ),
+        React.createElement(RN.TextInput, {
+          value,
+          placeholder,
+          placeholderTextColor: "#777",
+          onChangeText: text => {
+            storage[keyName] = text;
+            clearFakeCache();
+            forceUpdate();
+          },
+          autoCorrect: false,
+          autoCapitalize: "none",
+          keyboardType: "url",
+          style: { color: "#fff", backgroundColor: "#1f1f1f", padding: 12, borderRadius: 8, borderWidth: 1, borderColor: previewUrl ? "#5865f2" : "#333" }
+        }),
+        previewUrl ? React.createElement(RN.View, {
+          style: { marginTop: 10, borderRadius: 12, overflow: "hidden", borderWidth: 1, borderColor: "#3a3a3a", backgroundColor: "#171717" }
+        },
+          React.createElement(RN.Image, {
+            source: { uri: previewUrl },
+            resizeMode: "cover",
+            style: banner
+              ? { width: "100%", height: 120, backgroundColor: "#111" }
+              : { width: 96, height: 96, borderRadius: 48, alignSelf: "center", marginVertical: 12, backgroundColor: "#111" }
+          }),
+          React.createElement(RN.View, {
+            style: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 10, paddingVertical: 8, backgroundColor: "#202020" }
+          },
+            React.createElement(RN.Text, { style: { color: isGif ? "#57f287" : "#b5bac1", fontSize: 12, fontWeight: "800" } }, isGif ? "ANIMATED GIF" : "IMAGE PREVIEW"),
+            React.createElement(RN.Pressable, {
+              onPress: () => {
+                storage[keyName] = "";
+                clearFakeCache();
+                forceUpdate();
+                refreshDiscord();
+              },
+              style: { backgroundColor: "#4a2024", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6 }
+            }, React.createElement(RN.Text, { style: { color: "#ff7b84", fontSize: 12, fontWeight: "800" } }, "Clear"))
+          )
+        ) : value ? React.createElement(RN.Text, { style: { color: "#f0b232", fontSize: 12, marginTop: 6 } }, "Use an HTTPS URL or an image data URL.") : null
+      );
+    };
+
     const toggleFlag = id => {
       storage.selectedFlags = { ...(storage.selectedFlags || {}), [id]: !storage.selectedFlags?.[id] };
       clearFakeCache();
@@ -379,8 +488,10 @@
       React.createElement(Toggle, { label: "Enabled", sub: "Local-only changes", value: !!storage.enabled, onPress: () => { set("enabled", !storage.enabled); refreshDiscord(); } }),
       React.createElement(Toggle, { label: "Replace Mode / Hide Owned", sub: "ON = hides all real owned badges and only shows selected badges", value: !!storage.replaceMode, onPress: () => { set("replaceMode", !storage.replaceMode); refreshDiscord(); } }),
       React.createElement(Toggle, { label: "Nitro / Boost Dates", sub: "72-month Nitro + 24-month boost", value: !!storage.nitroEnabled, onPress: () => { set("nitroEnabled", !storage.nitroEnabled); refreshDiscord(); } }),
-      React.createElement(Field, { label: "Display name", keyName: "displayName", placeholder: "Badge Collector" }),
-      React.createElement(Field, { label: "Username", keyName: "username", placeholder: "badgecollector" }),
+      React.createElement(Field, { label: "Display name", keyName: "displayName", placeholder: "Fake Profile" }),
+      React.createElement(Field, { label: "Username", keyName: "username", placeholder: "fakeprofile" }),
+      React.createElement(MediaField, { label: "Profile picture", keyName: "avatarUrl", placeholder: "https://example.com/avatar.gif" }),
+      React.createElement(MediaField, { label: "Profile banner", keyName: "bannerUrl", placeholder: "https://example.com/banner.gif", banner: true }),
       React.createElement(RN.Pressable, { onPress: apply, style: { backgroundColor: "#5865f2", padding: 13, borderRadius: 10, marginBottom: 16 } },
         React.createElement(RN.Text, { style: { color: "#fff", textAlign: "center", fontWeight: "800" } }, "Apply / Refresh")
       ),
@@ -397,7 +508,7 @@
       React.createElement(RN.Text, { style: { color: "#fff", fontSize: 16, fontWeight: "900", marginTop: 14, marginBottom: 8 } }, "Remove Owned Nitro / Extra Icons"),
       ...EXTRA_BADGES.map(([id, label]) => React.createElement(Toggle, { key: "hide-extra-" + id, label: "Hide " + label, value: !!storage.hiddenExtras?.[id], onPress: () => toggleHiddenExtra(id) })),
 
-      React.createElement(RN.Text, { style: { color: "#aaa", marginTop: 12, lineHeight: 18 } }, "Typing is saved without refreshing every letter now. Tap Apply / Refresh after editing text. Restart Discord if badges do not refresh instantly.")
+      React.createElement(RN.Text, { style: { color: "#aaa", marginTop: 12, lineHeight: 18 } }, "Everything here changes only the local preview. No Discord account or profile data is uploaded or edited. Tap Apply / Refresh after editing.")
     );
   }
 
