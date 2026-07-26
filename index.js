@@ -8,8 +8,8 @@
   storage.enabled ??= false;
   storage.displayName ??= "Fake Profile";
   storage.username ??= "fakeprofile";
-  storage.avatarUrl ??= "";
-  storage.bannerUrl ??= "";
+  storage.avatarMedia ??= null;
+  storage.bannerMedia ??= null;
   storage.nitroEnabled ??= true;
   storage.selectedFlags ??= {};
   storage.selectedExtras ??= {};
@@ -85,11 +85,105 @@
     return d;
   }
 
-  function mediaUrl(key) {
-    const value = String(storage[key] || "").trim();
-    if (!value) return "";
+  function mediaValue(key) {
+    const media = storage[key];
+    if (typeof media === "string") return { uri: media };
+    if (media?.uri) return media;
 
-    return /^(https?:\/\/|data:image\/)/i.test(value) ? value : "";
+    // Keep previously saved URL-based previews working until the user replaces them.
+    const legacyKey = key === "avatarMedia" ? "avatarUrl" : "bannerUrl";
+    const legacyUri = String(storage[legacyKey] || "").trim();
+    return legacyUri ? { uri: legacyUri } : null;
+  }
+
+  function mediaUri(key) {
+    return String(mediaValue(key)?.uri || "").trim();
+  }
+
+  function isSupportedImage(asset) {
+    const type = String(asset?.type || "").toLowerCase();
+    const name = String(asset?.fileName || asset?.name || asset?.uri || "").toLowerCase();
+    return type.startsWith("image/") || /\.(gif|png|jpe?g|webp)(?:$|[?#])/i.test(name);
+  }
+
+  function savePickedMedia(key, asset) {
+    const uri = asset?.fileCopyUri || asset?.uri;
+    if (!uri || !isSupportedImage(asset)) throw new Error("Choose a GIF, PNG, JPEG, or WebP image.");
+
+    storage[key] = {
+      uri,
+      type: asset.type || "",
+      fileName: asset.fileName || asset.name || uri.split("/").pop() || "Selected image"
+    };
+    delete storage[key === "avatarMedia" ? "avatarUrl" : "bannerUrl"];
+    clearFakeCache();
+    refreshDiscord();
+  }
+
+  function pickFromPhotos(key, onDone, onError) {
+    const ImagePicker = metro.findByProps?.("launchImageLibrary");
+    if (!ImagePicker?.launchImageLibrary) {
+      onError("The system photo picker is unavailable in this client build.");
+      return;
+    }
+
+    try {
+      ImagePicker.launchImageLibrary({
+        mediaType: "photo",
+        selectionLimit: 1,
+        includeBase64: false
+      }, result => {
+        if (result?.didCancel) return;
+        if (result?.errorCode) {
+          onError(result.errorMessage || "The system photo picker could not open.");
+          return;
+        }
+
+        const asset = result?.assets?.[0];
+        if (!asset) return;
+        try {
+          savePickedMedia(key, asset);
+          onDone();
+        } catch (error) {
+          onError(error?.message || "That image could not be used.");
+        }
+      });
+    } catch (error) {
+      onError(error?.message || "The system photo picker could not open.");
+    }
+  }
+
+  async function pickFromFiles(key, onDone, onError) {
+    try {
+      const DocumentPicker = metro.findByProps?.("pickSingle", "isCancel");
+      if (DocumentPicker?.pickSingle) {
+        const asset = await DocumentPicker.pickSingle({
+          type: ["image/gif", "image/png", "image/jpeg", "image/webp"],
+          copyTo: "cachesDirectory"
+        });
+        savePickedMedia(key, asset);
+        onDone();
+        return;
+      }
+
+      const Documents = metro.findByProps?.("pick", "saveDocuments");
+      if (Documents?.pick) {
+        const result = await Documents.pick({
+          type: ["image/*"],
+          allowMultiSelection: false
+        });
+        const asset = Array.isArray(result) ? result[0] : result;
+        if (!asset) return;
+        savePickedMedia(key, asset);
+        onDone();
+        return;
+      }
+
+      onError("The system file picker is unavailable in this client build.");
+    } catch (error) {
+      const cancelled = error?.code === "DOCUMENT_PICKER_CANCELED" || error?.code === "OPERATION_CANCELED" || /cancel/i.test(String(error?.message || ""));
+      if (!cancelled) onError(error?.message || "The system file picker could not open.");
+    }
   }
 
   function isCurrentUser(user) {
@@ -186,8 +280,8 @@
     setOwnValue(obj, "badges", extraBadgeObjects(original?.badges ?? obj.badges));
     setOwnValue(obj, "profileBadges", extraBadgeObjects(original?.profileBadges ?? obj.profileBadges));
 
-    const avatarUrl = mediaUrl("avatarUrl");
-    const bannerUrl = mediaUrl("bannerUrl");
+    const avatarUrl = mediaUri("avatarMedia");
+    const bannerUrl = mediaUri("bannerMedia");
 
     if (avatarUrl) {
       setOwnValue(obj, "avatarURL", avatarUrl);
@@ -333,7 +427,7 @@
     try {
       if (IconUtils?.getUserAvatarURL) {
         unpatches.push(api.patcher.instead("getUserAvatarURL", IconUtils, (a, o) => {
-          const avatarUrl = mediaUrl("avatarUrl");
+          const avatarUrl = mediaUri("avatarMedia");
           return storage.enabled && avatarUrl && isCurrentUser(a?.[0]) ? avatarUrl : o(...a);
         }));
       }
@@ -344,7 +438,7 @@
     try {
       if (BannerUtils?.getUserBannerURL) {
         unpatches.push(api.patcher.instead("getUserBannerURL", BannerUtils, (a, o) => {
-          const bannerUrl = mediaUrl("bannerUrl");
+          const bannerUrl = mediaUri("bannerMedia");
           return storage.enabled && bannerUrl && isCurrentUser(a?.[0]) ? bannerUrl : o(...a);
         }));
       }
@@ -404,35 +498,39 @@
       })
     );
 
-    const MediaField = ({ label, keyName, placeholder, banner = false }) => {
-      const value = String(storage[keyName] || "");
-      const previewUrl = mediaUrl(keyName);
-      const isGif = /\.gif(?:$|[?#])/i.test(previewUrl) || /^data:image\/gif/i.test(previewUrl);
+    const MediaField = ({ label, keyName, banner = false }) => {
+      const [error, setError] = React.useState("");
+      const media = mediaValue(keyName);
+      const previewUri = mediaUri(keyName);
+      const displayName = String(media?.fileName || "Selected image");
+      const isGif = String(media?.type || "").toLowerCase() === "image/gif" || /\.gif(?:$|[?#])/i.test(displayName) || /\.gif(?:$|[?#])/i.test(previewUri);
+      const selected = !!previewUri;
+      const done = () => {
+        setError("");
+        forceUpdate();
+      };
 
       return React.createElement(RN.View, { style: { marginBottom: 16 } },
         React.createElement(RN.Text, { style: { color: "#fff", fontSize: 14, fontWeight: "800", marginBottom: 4 } }, label),
         React.createElement(RN.Text, { style: { color: "#aaa", fontSize: 12, lineHeight: 17, marginBottom: 8 } },
-          "Paste an HTTPS image or GIF URL. It is rendered only in your local fake-profile preview."
+          "Choose a GIF or image from Photos/Gallery or Files. It stays in this local fake-profile preview."
         ),
-        React.createElement(RN.TextInput, {
-          value,
-          placeholder,
-          placeholderTextColor: "#777",
-          onChangeText: text => {
-            storage[keyName] = text;
-            clearFakeCache();
-            forceUpdate();
-          },
-          autoCorrect: false,
-          autoCapitalize: "none",
-          keyboardType: "url",
-          style: { color: "#fff", backgroundColor: "#1f1f1f", padding: 12, borderRadius: 8, borderWidth: 1, borderColor: previewUrl ? "#5865f2" : "#333" }
-        }),
-        previewUrl ? React.createElement(RN.View, {
+        React.createElement(RN.View, { style: { flexDirection: "row", gap: 8 } },
+          React.createElement(RN.Pressable, {
+            onPress: () => pickFromPhotos(keyName, done, setError),
+            style: { flex: 1, backgroundColor: "#5865f2", padding: 12, borderRadius: 8 }
+          }, React.createElement(RN.Text, { style: { color: "#fff", textAlign: "center", fontSize: 13, fontWeight: "800" } }, "Choose photo / GIF")),
+          React.createElement(RN.Pressable, {
+            onPress: () => pickFromFiles(keyName, done, setError),
+            style: { flex: 1, backgroundColor: "#35373c", padding: 12, borderRadius: 8, borderWidth: 1, borderColor: "#4e5058" }
+          }, React.createElement(RN.Text, { style: { color: "#fff", textAlign: "center", fontSize: 13, fontWeight: "800" } }, "Choose file"))
+        ),
+        error ? React.createElement(RN.Text, { style: { color: "#ff7b84", fontSize: 12, marginTop: 8 } }, error) : null,
+        selected ? React.createElement(RN.View, {
           style: { marginTop: 10, borderRadius: 12, overflow: "hidden", borderWidth: 1, borderColor: "#3a3a3a", backgroundColor: "#171717" }
         },
           React.createElement(RN.Image, {
-            source: { uri: previewUrl },
+            source: { uri: previewUri },
             resizeMode: "cover",
             style: banner
               ? { width: "100%", height: 120, backgroundColor: "#111" }
@@ -441,10 +539,14 @@
           React.createElement(RN.View, {
             style: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 10, paddingVertical: 8, backgroundColor: "#202020" }
           },
-            React.createElement(RN.Text, { style: { color: isGif ? "#57f287" : "#b5bac1", fontSize: 12, fontWeight: "800" } }, isGif ? "ANIMATED GIF" : "IMAGE PREVIEW"),
+            React.createElement(RN.View, { style: { flex: 1, marginRight: 8 } },
+              React.createElement(RN.Text, { numberOfLines: 1, style: { color: "#fff", fontSize: 12, fontWeight: "800" } }, displayName),
+              React.createElement(RN.Text, { style: { color: isGif ? "#57f287" : "#b5bac1", fontSize: 11, marginTop: 2, fontWeight: "700" } }, isGif ? "ANIMATED GIF" : "IMAGE PREVIEW")
+            ),
             React.createElement(RN.Pressable, {
               onPress: () => {
-                storage[keyName] = "";
+                storage[keyName] = null;
+                delete storage[keyName === "avatarMedia" ? "avatarUrl" : "bannerUrl"];
                 clearFakeCache();
                 forceUpdate();
                 refreshDiscord();
@@ -452,7 +554,7 @@
               style: { backgroundColor: "#4a2024", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6 }
             }, React.createElement(RN.Text, { style: { color: "#ff7b84", fontSize: 12, fontWeight: "800" } }, "Clear"))
           )
-        ) : value ? React.createElement(RN.Text, { style: { color: "#f0b232", fontSize: 12, marginTop: 6 } }, "Use an HTTPS URL or an image data URL.") : null
+        ) : null
       );
     };
 
@@ -490,8 +592,8 @@
       React.createElement(Toggle, { label: "Nitro / Boost Dates", sub: "72-month Nitro + 24-month boost", value: !!storage.nitroEnabled, onPress: () => { set("nitroEnabled", !storage.nitroEnabled); refreshDiscord(); } }),
       React.createElement(Field, { label: "Display name", keyName: "displayName", placeholder: "Fake Profile" }),
       React.createElement(Field, { label: "Username", keyName: "username", placeholder: "fakeprofile" }),
-      React.createElement(MediaField, { label: "Profile picture", keyName: "avatarUrl", placeholder: "https://example.com/avatar.gif" }),
-      React.createElement(MediaField, { label: "Profile banner", keyName: "bannerUrl", placeholder: "https://example.com/banner.gif", banner: true }),
+      React.createElement(MediaField, { label: "Profile picture", keyName: "avatarMedia" }),
+      React.createElement(MediaField, { label: "Profile banner", keyName: "bannerMedia", banner: true }),
       React.createElement(RN.Pressable, { onPress: apply, style: { backgroundColor: "#5865f2", padding: 13, borderRadius: 10, marginBottom: 16 } },
         React.createElement(RN.Text, { style: { color: "#fff", textAlign: "center", fontWeight: "800" } }, "Apply / Refresh")
       ),

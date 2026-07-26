@@ -40,8 +40,32 @@ const Dispatcher = {
   dispatch() {},
   subscribe() {}
 };
+const ImagePicker = {
+  launchImageLibrary(options, callback) {
+    assert.equal(options.mediaType, "photo");
+    callback({
+      assets: [{
+        uri: "file:///picked/avatar.gif",
+        type: "image/gif",
+        fileName: "picked-avatar.gif"
+      }]
+    });
+  }
+};
+const DocumentPicker = {
+  isCancel: () => false,
+  async pickSingle(options) {
+    assert.ok(options.type.includes("image/gif"));
+    return {
+      uri: "content://picked/banner.gif",
+      fileCopyUri: "file:///cache/picked-banner.gif",
+      type: "image/gif",
+      name: "picked-banner.gif"
+    };
+  }
+};
 
-const modules = [UserStore, ProfileStore, IconUtils, BannerUtils, Dispatcher];
+const modules = [UserStore, ProfileStore, IconUtils, BannerUtils, Dispatcher, ImagePicker, DocumentPicker];
 const findByProps = (...props) => modules.find(module => props.every(prop => prop in module));
 const unpatches = [];
 const patcher = {
@@ -57,7 +81,8 @@ const patcher = {
 };
 const React = {
   createElement: (type, props, ...children) => ({ type, props: props || {}, children }),
-  useReducer: () => [0, () => {}]
+  useReducer: () => [0, () => {}],
+  useState: initial => [initial, () => {}]
 };
 const ReactNative = new Proxy({}, {
   get: (_target, key) => String(key)
@@ -66,8 +91,16 @@ const storage = {
   enabled: true,
   displayName: "Preview Name",
   username: "preview-user",
-  avatarUrl: "https://example.com/avatar.gif",
-  bannerUrl: "https://example.com/banner.gif"
+  avatarMedia: {
+    uri: "file:///local/avatar.gif",
+    type: "image/gif",
+    fileName: "avatar.gif"
+  },
+  bannerMedia: {
+    uri: "content://local/banner.gif",
+    type: "image/gif",
+    fileName: "banner.gif"
+  }
 };
 
 const context = {
@@ -97,13 +130,32 @@ assert.equal(currentUser.username, "real-user", "the real user object must not b
 assert.equal(currentUser.globalName, "Real User", "the real display name must remain untouched");
 assert.equal(previewUser.username, "preview-user");
 assert.equal(previewUser.globalName, "Preview Name");
-assert.equal(previewUser.getAvatarURL(), storage.avatarUrl);
-assert.equal(previewProfile.banner, storage.bannerUrl);
-assert.equal(IconUtils.getUserAvatarURL(currentUser), storage.avatarUrl);
+assert.equal(previewUser.getAvatarURL(), storage.avatarMedia.uri);
+assert.equal(previewProfile.banner, storage.bannerMedia.uri);
+assert.equal(IconUtils.getUserAvatarURL(currentUser), storage.avatarMedia.uri);
 assert.equal(IconUtils.getUserAvatarURL(otherUser), `real-avatar:${otherUser.id}`);
-assert.equal(BannerUtils.getUserBannerURL(currentUser.id), storage.bannerUrl);
+assert.equal(BannerUtils.getUserBannerURL(currentUser.id), storage.bannerMedia.uri);
 assert.equal(BannerUtils.getUserBannerURL(otherUser.id), `real-banner:${otherUser.id}`);
 assert.equal(UserStore.getUser(otherUser.id), otherUser, "other users must not be preview-patched");
+
+const walk = node => {
+  if (!node || typeof node !== "object") return [];
+  return [node, ...(node.children || []).flatMap(walk)];
+};
+const settingsTree = fakeProfile.settings();
+const mediaFields = walk(settingsTree).filter(node => typeof node.type === "function" && node.props?.keyName);
+
+const avatarField = mediaFields.find(node => node.props.keyName === "avatarMedia");
+const bannerField = mediaFields.find(node => node.props.keyName === "bannerMedia");
+assert.ok(avatarField && bannerField, "both native media controls must render");
+
+const avatarButtons = walk(avatarField.type(avatarField.props)).filter(node => node.type === "Pressable");
+avatarButtons[0].props.onPress();
+assert.equal(storage.avatarMedia.uri, "file:///picked/avatar.gif", "photo picker result must be saved locally");
+
+const bannerButtons = walk(bannerField.type(bannerField.props)).filter(node => node.type === "Pressable");
+await bannerButtons[1].props.onPress();
+assert.equal(storage.bannerMedia.uri, "file:///cache/picked-banner.gif", "file picker result must prefer its local cache copy");
 
 fakeProfile.onUnload();
 assert.equal(IconUtils.getUserAvatarURL(currentUser), `real-avatar:${currentUser.id}`);

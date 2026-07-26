@@ -5,7 +5,7 @@ FakeProfile is a local-only Bunny/Vendetta plugin for previewing a customized Di
 ## Features
 
 - Custom display name and username
-- Profile picture and banner previews from HTTPS image URLs
+- Native profile picture and banner selection from Photos/Gallery or Files
 - Animated GIF support for both profile pictures and banners
 - Public, Nitro, boost, and extra badge previews
 - Replace or selectively hide locally displayed badges
@@ -13,9 +13,9 @@ FakeProfile is a local-only Bunny/Vendetta plugin for previewing a customized Di
 
 ## GIF profile editor
 
-Open the plugin settings and paste an HTTPS URL ending in `.gif` into **Profile picture** or **Profile banner**. The editor displays the animation before it is applied. PNG, JPEG, WebP, and image data URLs are supported too.
+Open the plugin settings and use **Choose photo / GIF** or **Choose file** under **Profile picture** or **Profile banner**. On iOS this opens the system Photos or Files picker; on Android it opens the system Gallery/Photo Picker or file picker. The editor displays the selected image or animation before it is applied.
 
-The image host receives a normal image request when the preview is rendered. FakeProfile never sends these settings to Discord.
+GIF, PNG, JPEG, and WebP files are supported. FakeProfile keeps the selection local and never sends it to Discord.
 
 ## Repository layout
 

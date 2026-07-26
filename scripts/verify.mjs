@@ -39,11 +39,16 @@ if (flattenedSources.length) {
 }
 
 for (const feature of [
-  'storage.avatarUrl ??= ""',
-  'storage.bannerUrl ??= ""',
+  "storage.avatarMedia ??= null",
+  "storage.bannerMedia ??= null",
+  '"launchImageLibrary"',
+  '"pickSingle"',
+  '"saveDocuments"',
   '"getUserAvatarURL"',
   '"Profile picture"',
   '"Profile banner"',
+  '"Choose photo / GIF"',
+  '"Choose file"',
   '"ANIMATED GIF"'
 ]) {
   if (!entrypoint.includes(feature)) fail(`missing preview feature marker: ${feature}`);

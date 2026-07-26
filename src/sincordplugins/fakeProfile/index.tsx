@@ -331,8 +331,7 @@ function ImageUpload({ label, value, onChange, banner = false }: { label: string
         reader.readAsDataURL(file);
     }
     return (<div className="cp-field"><div className="cp-section-label">{label}</div><div className="cp-image-row">
-        <input className="cp-input" placeholder="Image or GIF URL..." value={value.startsWith("data:") ? "" : value} onChange={e => { setError(""); onChange(e.target.value); }} />
-        <button className="cp-file-btn" onClick={() => fileRef.current?.click()} title="Choose a file"><FolderIcon /></button>
+        <button className="cp-file-btn" onClick={() => fileRef.current?.click()} title="Choose an image or GIF"><FolderIcon /><span>Choose image / GIF</span></button>
         <input ref={fileRef} type="file" accept="image/gif,image/png,image/jpeg,image/webp" style={{ display: "none" }} onChange={handleFile} />
         {value && <><img src={value} alt={`${label} preview`} className={banner ? "cp-preview-banner" : "cp-preview-avatar"} /><button className="cp-clear-btn" onClick={() => onChange("")} title="Remove"><CloseIcon /></button></>}
     </div>
