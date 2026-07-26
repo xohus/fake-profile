@@ -31,10 +31,29 @@ const ProfileStore = {
   emitChange() {}
 };
 const IconUtils = {
-  getUserAvatarURL: user => `real-avatar:${user.id}`
+  getUserAvatarURL: user => `real-avatar:${user.id}`,
+  getUserAvatarSource: user => ({ uri: `real-avatar-source:${user.id}` })
 };
 const BannerUtils = {
+  default: {},
   getUserBannerURL: user => `real-banner:${typeof user === "string" ? user : user.id}`
+};
+const HeaderAvatar = {
+  default: ({ user }) => ({
+    type: "View",
+    props: {
+      children: {
+        type: "Image",
+        props: { source: { uri: `rendered-avatar:${user.id}` } }
+      }
+    }
+  })
+};
+const UserProfileBanner = {
+  default: ({ displayProfile }) => ({
+    type: "Image",
+    props: { source: { uri: `rendered-banner:${displayProfile.userId}` } }
+  })
 };
 const Dispatcher = {
   dispatch() {},
@@ -77,6 +96,19 @@ const patcher = {
     };
     unpatches.push(unpatch);
     return unpatch;
+  },
+  after(name, target, callback) {
+    const original = target[name];
+    target[name] = (...args) => {
+      const result = original(...args);
+      const replacement = callback(args, result);
+      return replacement === undefined ? result : replacement;
+    };
+    const unpatch = () => {
+      target[name] = original;
+    };
+    unpatches.push(unpatch);
+    return unpatch;
   }
 };
 const React = {
@@ -109,7 +141,8 @@ const context = {
       common: { React, ReactNative },
       findByStoreName: name => name === "UserStore" ? UserStore : name === "UserProfileStore" ? ProfileStore : null,
       findByStoreNameLazy: () => null,
-      findByProps
+      findByProps,
+      findByName: name => name === "HeaderAvatar" ? HeaderAvatar : name === "UserProfileBanner" ? UserProfileBanner : null
     },
     utils: { lazy: {} },
     api: { patcher }
@@ -133,10 +166,16 @@ assert.equal(previewUser.globalName, "Preview Name");
 assert.equal(previewUser.getAvatarURL(), storage.avatarMedia.uri);
 assert.equal(previewProfile.banner, storage.bannerMedia.uri);
 assert.equal(IconUtils.getUserAvatarURL(currentUser), storage.avatarMedia.uri);
+assert.equal(IconUtils.getUserAvatarSource(currentUser).uri, storage.avatarMedia.uri);
 assert.equal(IconUtils.getUserAvatarURL(otherUser), `real-avatar:${otherUser.id}`);
+assert.equal(IconUtils.getUserAvatarSource(otherUser).uri, `real-avatar-source:${otherUser.id}`);
 assert.equal(BannerUtils.getUserBannerURL(currentUser.id), storage.bannerMedia.uri);
 assert.equal(BannerUtils.getUserBannerURL(otherUser.id), `real-banner:${otherUser.id}`);
 assert.equal(UserStore.getUser(otherUser.id), otherUser, "other users must not be preview-patched");
+assert.equal(HeaderAvatar.default({ user: currentUser }).props.children.props.source.uri, storage.avatarMedia.uri);
+assert.equal(HeaderAvatar.default({ user: otherUser }).props.children.props.source.uri, `rendered-avatar:${otherUser.id}`);
+assert.equal(UserProfileBanner.default({ displayProfile: { userId: currentUser.id } }).props.source.uri, storage.bannerMedia.uri);
+assert.equal(UserProfileBanner.default({ displayProfile: { userId: otherUser.id } }).props.source.uri, `rendered-banner:${otherUser.id}`);
 
 const walk = node => {
   if (!node || typeof node !== "object") return [];
@@ -159,6 +198,9 @@ assert.equal(storage.bannerMedia.uri, "file:///cache/picked-banner.gif", "file p
 
 fakeProfile.onUnload();
 assert.equal(IconUtils.getUserAvatarURL(currentUser), `real-avatar:${currentUser.id}`);
+assert.equal(IconUtils.getUserAvatarSource(currentUser).uri, `real-avatar-source:${currentUser.id}`);
 assert.equal(BannerUtils.getUserBannerURL(currentUser.id), `real-banner:${currentUser.id}`);
+assert.equal(HeaderAvatar.default({ user: currentUser }).props.children.props.source.uri, `rendered-avatar:${currentUser.id}`);
+assert.equal(UserProfileBanner.default({ displayProfile: { userId: currentUser.id } }).props.source.uri, `rendered-banner:${currentUser.id}`);
 
-console.log("Verified local-only runtime cloning, GIF media hooks, user scoping, and cleanup.");
+console.log("Verified local-only cloning, native media pickers, render-layer avatar/banner replacement, scoping, and cleanup.");

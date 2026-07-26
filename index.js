@@ -196,6 +196,65 @@
     }
   }
 
+  function replaceFirstImageSource(node, uri) {
+    if (!node || !uri || typeof node !== "object") return false;
+    const props = node.props;
+
+    if (props && typeof props === "object") {
+      if (props.bannerSource) {
+        props.bannerSource = { uri };
+        return true;
+      }
+
+      if (props.source) {
+        props.source = { uri };
+        return true;
+      }
+
+      const children = props.children;
+      if (Array.isArray(children)) {
+        for (const child of children) if (replaceFirstImageSource(child, uri)) return true;
+      } else if (replaceFirstImageSource(children, uri)) {
+        return true;
+      }
+    }
+
+    if (Array.isArray(node.children)) {
+      for (const child of node.children) if (replaceFirstImageSource(child, uri)) return true;
+    }
+
+    return false;
+  }
+
+  function patchRenderedMedia() {
+    if (!api.patcher.after || !metro.findByName) return;
+
+    const patchComponent = (names, mediaKey, getUser) => {
+      for (const name of names) {
+        try {
+          const component = metro.findByName(name, false);
+          if (!component?.default) continue;
+
+          unpatches.push(api.patcher.after("default", component, (args, tree) => {
+            const uri = mediaUri(mediaKey);
+            const user = getUser(args?.[0]);
+            if (!storage.enabled || !uri || !isCurrentUser(user)) return tree;
+            replaceFirstImageSource(tree, uri);
+            return tree;
+          }));
+          return;
+        } catch {}
+      }
+    };
+
+    patchComponent(["HeaderAvatar"], "avatarMedia", props => props?.user);
+    patchComponent(
+      ["UserProfileBanner", "ProfileBanner"],
+      "bannerMedia",
+      props => props?.displayProfile?.userId || props?.user?.id || props?.userId
+    );
+  }
+
   function selectedFlagMask() {
     let mask = 0;
     const selected = storage.selectedFlags || {};
@@ -422,7 +481,8 @@
       } catch {}
     }
 
-    const IconUtils = metro.findByProps?.("getUserAvatarURL");
+    const IconUtils = metro.findByProps?.("getUserAvatarURL", "getUserAvatarSource")
+      || metro.findByProps?.("getUserAvatarURL");
 
     try {
       if (IconUtils?.getUserAvatarURL) {
@@ -433,7 +493,17 @@
       }
     } catch {}
 
-    const BannerUtils = metro.findByProps?.("getUserBannerURL");
+    try {
+      if (IconUtils?.getUserAvatarSource) {
+        unpatches.push(api.patcher.instead("getUserAvatarSource", IconUtils, (a, o) => {
+          const avatarUrl = mediaUri("avatarMedia");
+          return storage.enabled && avatarUrl && isCurrentUser(a?.[0]) ? { uri: avatarUrl } : o(...a);
+        }));
+      }
+    } catch {}
+
+    const BannerUtils = metro.findByProps?.("default", "getUserBannerURL")
+      || metro.findByProps?.("getUserBannerURL");
 
     try {
       if (BannerUtils?.getUserBannerURL) {
@@ -443,6 +513,8 @@
         }));
       }
     } catch {}
+
+    patchRenderedMedia();
   }
 
   function refreshDiscord() {
