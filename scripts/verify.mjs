@@ -12,6 +12,7 @@ const manifest = JSON.parse(readFileSync("builds/fakeprofile/manifest.json", "ut
 const directManifest = JSON.parse(readFileSync("manifest.json", "utf8"));
 const entrypointPath = `builds/fakeprofile/${manifest.main}`;
 const entrypoint = readFileSync(entrypointPath, "utf8");
+const legacyEntrypoint = readFileSync("index.js", "utf8");
 const entrypointHash = createHash("sha256").update(entrypoint).digest("hex");
 
 const syntax = spawnSync(process.execPath, ["--check", entrypointPath], {
@@ -29,6 +30,7 @@ if (manifest.version !== repository.fakeprofile?.version) fail("repo and manifes
 if (directManifest.version !== manifest.version) fail("direct and repository manifest versions must match");
 if (directManifest.main !== entrypointPath) fail("direct manifest must point to the packaged entrypoint");
 if (directManifest.hash !== entrypointHash) fail("direct manifest hash must match the packaged entrypoint");
+if (legacyEntrypoint !== entrypoint) fail("root entrypoint must match the packaged entrypoint");
 
 for (const path of [
   "src/api/index.ts",
