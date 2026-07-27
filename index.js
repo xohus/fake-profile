@@ -1,4 +1,4 @@
-var plugin = (() => {
+(() => {
   "use strict";
 
   const metro = bunny.metro;
@@ -662,5 +662,3 @@ var plugin = (() => {
   instance.default = instance;
   return instance;
 })();
-
-plugin;

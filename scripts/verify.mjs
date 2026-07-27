@@ -19,9 +19,20 @@ const legacyEntrypointHash = createHash("sha256").update(legacyEntrypoint).diges
 const syntax = spawnSync(process.execPath, ["--check", entrypointPath], {
   encoding: "utf8"
 });
+const legacySyntax = spawnSync(
+  process.execPath,
+  ["--check", "-"],
+  {
+    encoding: "utf8",
+    input: `vendetta => { return ${legacyEntrypoint} }`
+  }
+);
 
 if (syntax.status !== 0) {
   fail(syntax.stderr.trim() || `${entrypointPath} has invalid JavaScript syntax`);
+}
+if (legacySyntax.status !== 0) {
+  fail(legacySyntax.stderr.trim() || "root entrypoint is invalid in the legacy loader");
 }
 
 if (manifest.id !== "fakeprofile") fail("manifest id must be fakeprofile");
@@ -30,7 +41,7 @@ if (manifest.type !== "plugin") fail("manifest type must be plugin");
 if (manifest.version !== repository.fakeprofile?.version) fail("repo and manifest versions must match");
 if (directManifest.main !== "index.js") fail("direct manifest must use the legacy root entrypoint");
 if (directManifest.hash !== legacyEntrypointHash) fail("direct manifest hash must match the root entrypoint");
-if (legacyEntrypoint !== entrypoint) fail("root entrypoint must match the packaged entrypoint");
+if (!legacyEntrypoint.trimStart().startsWith("(() =>")) fail("root entrypoint must be a legacy expression");
 
 for (const path of [
   "src/api/index.ts",

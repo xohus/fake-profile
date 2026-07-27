@@ -121,6 +121,7 @@ const context = {
 };
 
 const entrypoint = readFileSync("builds/fakeprofile/index.js", "utf8");
+const legacyEntrypoint = readFileSync("index.js", "utf8");
 const instantiatePlugin = sandbox => vm.runInNewContext(
   `(bunny, definePlugin) => { ${entrypoint}; return plugin?.default ?? plugin; }`,
   { console: sandbox.console }
@@ -170,11 +171,13 @@ assert.equal(IconUtils.getUserAvatarURL(currentUser), `real-avatar:${currentUser
 assert.equal(IconUtils.getUserAvatarSource(currentUser).uri, `real-avatar-source:${currentUser.id}`);
 assert.equal(BannerUtils.getUserBannerURL(currentUser.id), `real-banner:${currentUser.id}`);
 
-const legacyPlugin = vm.runInNewContext(entrypoint, {
-  bunny: { ...context.bunny, plugin: undefined },
-  vendetta: { plugin: { storage } },
-  console
-});
+const legacyPlugin = vm.runInNewContext(
+  `(vendetta) => { return ${legacyEntrypoint} }`,
+  {
+    bunny: { ...context.bunny, plugin: undefined },
+    console
+  }
+)({ plugin: { storage } });
 assert.equal(legacyPlugin.default, legacyPlugin, "legacy loader must receive a default plugin export");
 assert.equal(typeof legacyPlugin.onLoad, "function");
 assert.equal(typeof legacyPlugin.onUnload, "function");
