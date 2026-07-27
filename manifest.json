@@ -1,0 +1,27 @@
+{
+  "id": "fakeprofile",
+  "spec": 3,
+  "version": "1.1.2",
+  "type": "plugin",
+  "name": "FakeProfile",
+  "description": "Preview a custom profile locally with image or GIF avatars and banners.",
+  "authors": [
+    {
+      "name": "xohus"
+    }
+  ],
+  "display": {
+    "name": "FakeProfile",
+    "description": "Preview a custom profile locally with image or GIF avatars and banners.",
+    "authors": [
+      {
+        "name": "xohus"
+      }
+    ]
+  },
+  "main": "builds/fakeprofile/index.js",
+  "hash": "c18c91b72031778df6d5f95c657bc86508e9c72bdfaca3723afab6b19532b7b4",
+  "vendetta": {
+    "icon": "ic_profile_24px"
+  }
+}

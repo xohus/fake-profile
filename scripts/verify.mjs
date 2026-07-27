@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 
@@ -8,8 +9,10 @@ const fail = message => {
 
 const repository = JSON.parse(readFileSync("repo.json", "utf8"));
 const manifest = JSON.parse(readFileSync("builds/fakeprofile/manifest.json", "utf8"));
+const directManifest = JSON.parse(readFileSync("manifest.json", "utf8"));
 const entrypointPath = `builds/fakeprofile/${manifest.main}`;
 const entrypoint = readFileSync(entrypointPath, "utf8");
+const entrypointHash = createHash("sha256").update(entrypoint).digest("hex");
 
 const syntax = spawnSync(process.execPath, ["--check", entrypointPath], {
   encoding: "utf8"
@@ -23,6 +26,9 @@ if (manifest.id !== "fakeprofile") fail("manifest id must be fakeprofile");
 if (manifest.spec !== 3) fail("manifest must use Bunny plugin spec 3");
 if (manifest.type !== "plugin") fail("manifest type must be plugin");
 if (manifest.version !== repository.fakeprofile?.version) fail("repo and manifest versions must match");
+if (directManifest.version !== manifest.version) fail("direct and repository manifest versions must match");
+if (directManifest.main !== entrypointPath) fail("direct manifest must point to the packaged entrypoint");
+if (directManifest.hash !== entrypointHash) fail("direct manifest hash must match the packaged entrypoint");
 
 for (const path of [
   "src/api/index.ts",
