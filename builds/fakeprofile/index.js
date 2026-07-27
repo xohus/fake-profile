@@ -1,9 +1,13 @@
-(function(exports, metro, common, lazy, api, plugin) {
+var plugin = (() => {
   "use strict";
 
+  const metro = bunny.metro;
+  const common = metro.common;
+  const lazy = bunny.utils.lazy;
+  const api = bunny.api;
   const React = common.React;
   const RN = common.ReactNative;
-  const storage = plugin.storage;
+  const storage = bunny.plugin.createStorage();
 
   storage.enabled ??= false;
   storage.displayName ??= "Fake Profile";
@@ -626,24 +630,20 @@
     );
   }
 
-  const index = {
-    onLoad() {
+  return {
+    start() {
       try {
         patchStores();
       } catch (error) {
         console.error("[FakeProfile] Some preview hooks are unavailable in this Discord build:", error);
       }
     },
-    onUnload() {
+    stop() {
       for (const unpatch of unpatches) try { unpatch?.(); } catch {}
       unpatches = [];
       clearFakeCache();
       refreshDiscord();
     },
-    settings: Settings
+    SettingsComponent: Settings
   };
-
-  exports.default = index;
-  Object.defineProperty(exports, "__esModule", { value: true });
-  return exports;
-})({}, bunny.metro, bunny.metro.common, bunny.utils.lazy, bunny.api, vendetta.plugin);
+})();

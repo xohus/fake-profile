@@ -1,9 +1,9 @@
 {
   "name": "fake-profile-preview",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
-  "description": "A local-only fake Discord profile preview plugin for Bunny/Vendetta.",
-  "main": "index.js",
+  "description": "A local-only fake Discord profile preview plugin for Bunny-based modded clients.",
+  "main": "builds/fakeprofile/index.js",
   "scripts": {
     "check": "node scripts/verify.mjs",
     "test": "node scripts/verify.mjs && node scripts/smoke-runtime.mjs"

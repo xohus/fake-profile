@@ -114,15 +114,19 @@ const context = {
       findByProps
     },
     utils: { lazy: {} },
-    api: { patcher }
+    api: { patcher },
+    plugin: { createStorage: () => storage }
   },
-  vendetta: { plugin: { storage } },
   console
 };
 
-const pluginModule = vm.runInNewContext(readFileSync("index.js", "utf8"), context);
-const fakeProfile = pluginModule.default;
-fakeProfile.onLoad();
+const entrypoint = readFileSync("builds/fakeprofile/index.js", "utf8");
+const instantiatePlugin = sandbox => vm.runInNewContext(
+  `(bunny, definePlugin) => { ${entrypoint}; return plugin?.default ?? plugin; }`,
+  { console: sandbox.console }
+)(sandbox.bunny, value => value);
+const fakeProfile = instantiatePlugin(context);
+fakeProfile.start();
 
 const previewUser = UserStore.getCurrentUser();
 const previewProfile = ProfileStore.getUserProfile(currentUser.id);
@@ -146,7 +150,7 @@ const walk = node => {
   if (!node || typeof node !== "object") return [];
   return [node, ...(node.children || []).flatMap(walk)];
 };
-const settingsTree = fakeProfile.settings();
+const settingsTree = fakeProfile.SettingsComponent();
 const mediaFields = walk(settingsTree).filter(node => typeof node.type === "function" && node.props?.keyName);
 
 const avatarField = mediaFields.find(node => node.props.keyName === "avatarMedia");
@@ -161,7 +165,7 @@ const bannerButtons = walk(bannerField.type(bannerField.props)).filter(node => n
 await bannerButtons[1].props.onPress();
 assert.equal(storage.bannerMedia.uri, "file:///cache/picked-banner.gif", "file picker result must prefer its local cache copy");
 
-fakeProfile.onUnload();
+fakeProfile.stop();
 assert.equal(IconUtils.getUserAvatarURL(currentUser), `real-avatar:${currentUser.id}`);
 assert.equal(IconUtils.getUserAvatarSource(currentUser).uri, `real-avatar-source:${currentUser.id}`);
 assert.equal(BannerUtils.getUserBannerURL(currentUser.id), `real-banner:${currentUser.id}`);
@@ -178,13 +182,13 @@ const hostileContext = {
       }
     },
     utils: { lazy: {} },
-    api: { patcher }
+    api: { patcher },
+    plugin: { createStorage: () => ({}) }
   },
-  vendetta: { plugin: { storage: {} } },
   console: { error() {} }
 };
-const hostileModule = vm.runInNewContext(readFileSync("index.js", "utf8"), hostileContext);
-assert.doesNotThrow(() => hostileModule.default.onLoad(), "unsupported modules must not block plugin activation");
-assert.doesNotThrow(() => hostileModule.default.settings(), "settings must render even when preview hooks are unavailable");
+const hostilePlugin = instantiatePlugin(hostileContext);
+assert.doesNotThrow(() => hostilePlugin.start(), "unsupported modules must not block plugin activation");
+assert.doesNotThrow(() => hostilePlugin.SettingsComponent(), "settings must render even when preview hooks are unavailable");
 
 console.log("Verified local-only cloning, native media pickers, stable avatar/banner resolvers, scoping, and cleanup.");

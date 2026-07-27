@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 
@@ -7,21 +6,23 @@ const fail = message => {
   process.exitCode = 1;
 };
 
-const manifest = JSON.parse(readFileSync("manifest.json", "utf8"));
-const entrypoint = readFileSync(manifest.main, "utf8");
-const entrypointHash = createHash("sha256").update(entrypoint).digest("hex");
+const repository = JSON.parse(readFileSync("repo.json", "utf8"));
+const manifest = JSON.parse(readFileSync("builds/fakeprofile/manifest.json", "utf8"));
+const entrypointPath = `builds/fakeprofile/${manifest.main}`;
+const entrypoint = readFileSync(entrypointPath, "utf8");
 
-const syntax = spawnSync(process.execPath, ["--check", manifest.main], {
+const syntax = spawnSync(process.execPath, ["--check", entrypointPath], {
   encoding: "utf8"
 });
 
 if (syntax.status !== 0) {
-  fail(syntax.stderr.trim() || `${manifest.main} has invalid JavaScript syntax`);
+  fail(syntax.stderr.trim() || `${entrypointPath} has invalid JavaScript syntax`);
 }
 
-if (manifest.hash !== entrypointHash) {
-  fail(`manifest hash does not match ${manifest.main}; expected ${entrypointHash}`);
-}
+if (manifest.id !== "fakeprofile") fail("manifest id must be fakeprofile");
+if (manifest.spec !== 3) fail("manifest must use Bunny plugin spec 3");
+if (manifest.type !== "plugin") fail("manifest type must be plugin");
+if (manifest.version !== repository.fakeprofile?.version) fail("repo and manifest versions must match");
 
 for (const path of [
   "src/api/index.ts",
@@ -51,11 +52,14 @@ for (const feature of [
   '"Choose photo / GIF"',
   '"Choose file"',
   '"ANIMATED GIF"',
-  '"[FakeProfile] Some preview hooks are unavailable'
+  '"[FakeProfile] Some preview hooks are unavailable',
+  "var plugin = (() =>",
+  "const storage = bunny.plugin.createStorage()",
+  "SettingsComponent: Settings"
 ]) {
   if (!entrypoint.includes(feature)) fail(`missing preview feature marker: ${feature}`);
 }
 
 if (!process.exitCode) {
-  console.log("Verified JavaScript syntax, manifest integrity, source layout, and GIF preview hooks.");
+  console.log("Verified Bunny spec 3 packaging, JavaScript syntax, source layout, and GIF preview hooks.");
 }

@@ -1,6 +1,6 @@
 # FakeProfile
 
-FakeProfile is a local-only Bunny/Vendetta plugin for previewing a customized Discord profile. It changes what the signed-in user sees in their own client; it does not edit or upload Discord account/profile data.
+FakeProfile is a local-only Bunny-compatible plugin for previewing a customized Discord profile in a modded Discord client. It changes what the signed-in user sees in their own client; it does not edit or upload Discord account/profile data.
 
 ## Features
 
@@ -19,7 +19,9 @@ GIF, PNG, JPEG, and WebP files are supported. FakeProfile keeps the selection lo
 
 ## Repository layout
 
-- `index.js` — shipped Bunny/Vendetta plugin entrypoint referenced by `manifest.json`
+- `repo.json` — plugin repository index used by the modded client
+- `builds/fakeprofile/manifest.json` — Bunny spec 3 plugin manifest
+- `builds/fakeprofile/index.js` — shipped plugin entrypoint
 - `src/sincordplugins/fakeProfile/` — organized Sincord source version and styles
 - `src/api`, `src/utils`, `src/webpack` — supporting source snapshot
 - `scripts/verify.mjs` — dependency-free syntax, manifest, layout, and feature verification
