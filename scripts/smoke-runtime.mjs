@@ -170,6 +170,19 @@ assert.equal(IconUtils.getUserAvatarURL(currentUser), `real-avatar:${currentUser
 assert.equal(IconUtils.getUserAvatarSource(currentUser).uri, `real-avatar-source:${currentUser.id}`);
 assert.equal(BannerUtils.getUserBannerURL(currentUser.id), `real-banner:${currentUser.id}`);
 
+const legacyPlugin = vm.runInNewContext(entrypoint, {
+  bunny: { ...context.bunny, plugin: undefined },
+  vendetta: { plugin: { storage } },
+  console
+});
+assert.equal(legacyPlugin.default, legacyPlugin, "legacy loader must receive a default plugin export");
+assert.equal(typeof legacyPlugin.onLoad, "function");
+assert.equal(typeof legacyPlugin.onUnload, "function");
+assert.equal(typeof legacyPlugin.settings, "function");
+assert.doesNotThrow(() => legacyPlugin.onLoad(), "legacy plugin must activate");
+assert.doesNotThrow(() => legacyPlugin.settings(), "legacy settings must render");
+legacyPlugin.onUnload();
+
 const hostileContext = {
   bunny: {
     metro: {

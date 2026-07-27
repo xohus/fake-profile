@@ -14,6 +14,7 @@ const entrypointPath = `builds/fakeprofile/${manifest.main}`;
 const entrypoint = readFileSync(entrypointPath, "utf8");
 const legacyEntrypoint = readFileSync("index.js", "utf8");
 const entrypointHash = createHash("sha256").update(entrypoint).digest("hex");
+const legacyEntrypointHash = createHash("sha256").update(legacyEntrypoint).digest("hex");
 
 const syntax = spawnSync(process.execPath, ["--check", entrypointPath], {
   encoding: "utf8"
@@ -27,9 +28,8 @@ if (manifest.id !== "fakeprofile") fail("manifest id must be fakeprofile");
 if (manifest.spec !== 3) fail("manifest must use Bunny plugin spec 3");
 if (manifest.type !== "plugin") fail("manifest type must be plugin");
 if (manifest.version !== repository.fakeprofile?.version) fail("repo and manifest versions must match");
-if (directManifest.version !== manifest.version) fail("direct and repository manifest versions must match");
-if (directManifest.main !== entrypointPath) fail("direct manifest must point to the packaged entrypoint");
-if (directManifest.hash !== entrypointHash) fail("direct manifest hash must match the packaged entrypoint");
+if (directManifest.main !== "index.js") fail("direct manifest must use the legacy root entrypoint");
+if (directManifest.hash !== legacyEntrypointHash) fail("direct manifest hash must match the root entrypoint");
 if (legacyEntrypoint !== entrypoint) fail("root entrypoint must match the packaged entrypoint");
 
 for (const path of [
@@ -62,8 +62,11 @@ for (const feature of [
   '"ANIMATED GIF"',
   '"[FakeProfile] Some preview hooks are unavailable',
   "var plugin = (() =>",
-  "const storage = bunny.plugin.createStorage()",
-  "SettingsComponent: Settings"
+  "pluginApi.createStorage()",
+  "SettingsComponent: Settings",
+  "onLoad: start",
+  "onUnload: stop",
+  "settings: Settings"
 ]) {
   if (!entrypoint.includes(feature)) fail(`missing preview feature marker: ${feature}`);
 }

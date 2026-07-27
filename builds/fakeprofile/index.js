@@ -7,7 +7,12 @@ var plugin = (() => {
   const api = bunny.api;
   const React = common.React;
   const RN = common.ReactNative;
-  const storage = bunny.plugin.createStorage();
+  const pluginApi = bunny.plugin ?? (typeof vendetta !== "undefined" ? vendetta.plugin : null);
+  const storage = typeof pluginApi?.createStorage === "function"
+    ? pluginApi.createStorage()
+    : pluginApi?.storage;
+
+  if (!storage) throw new Error("FakeProfile could not open plugin storage");
 
   storage.enabled ??= false;
   storage.displayName ??= "Fake Profile";
@@ -630,20 +635,32 @@ var plugin = (() => {
     );
   }
 
-  return {
-    start() {
-      try {
-        patchStores();
-      } catch (error) {
-        console.error("[FakeProfile] Some preview hooks are unavailable in this Discord build:", error);
-      }
-    },
-    stop() {
-      for (const unpatch of unpatches) try { unpatch?.(); } catch {}
-      unpatches = [];
-      clearFakeCache();
-      refreshDiscord();
-    },
-    SettingsComponent: Settings
+  function start() {
+    try {
+      patchStores();
+    } catch (error) {
+      console.error("[FakeProfile] Some preview hooks are unavailable in this Discord build:", error);
+    }
+  }
+
+  function stop() {
+    for (const unpatch of unpatches) try { unpatch?.(); } catch {}
+    unpatches = [];
+    clearFakeCache();
+    refreshDiscord();
+  }
+
+  const instance = {
+    start,
+    stop,
+    SettingsComponent: Settings,
+    onLoad: start,
+    onUnload: stop,
+    settings: Settings
   };
+
+  instance.default = instance;
+  return instance;
 })();
+
+plugin;
