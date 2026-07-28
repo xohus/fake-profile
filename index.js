@@ -451,32 +451,29 @@
       })
     );
 
-    const MediaField = ({ label, keyName, banner }) => {
-      const [error, setError] = React.useState("");
-      const uri = mediaUri(keyName);
+    const pickMedia = async (action, keyName) => {
+      try {
+        if (await action(keyName)) forceUpdate();
+      } catch (error) {
+        try { RN.Alert.alert("FakeProfile", error?.message || "Could not open the picker."); } catch {}
+      }
+    };
 
-      const pick = async action => {
-        setError("");
-        try {
-          if (await action(keyName)) forceUpdate();
-        } catch (reason) {
-          setError(reason?.message || "Could not open the picker.");
-        }
-      };
+    const mediaField = (label, keyName, banner) => {
+      const uri = mediaUri(keyName);
 
       return React.createElement(RN.View, { style: { marginBottom: 14 } },
         React.createElement(RN.Text, { style: { color: "#fff", fontSize: 14, fontWeight: "700", marginBottom: 8 } }, label),
         React.createElement(RN.View, { style: { flexDirection: "row" } },
           React.createElement(RN.Pressable, {
-            onPress: () => pick(choosePhoto),
+            onPress: () => pickMedia(choosePhoto, keyName),
             style: { flex: 1, backgroundColor: "#5865f2", padding: 11, borderRadius: 8, marginRight: 6 }
           }, React.createElement(RN.Text, { style: { color: "#fff", textAlign: "center", fontWeight: "800" } }, "Choose photo")),
           React.createElement(RN.Pressable, {
-            onPress: () => pick(chooseFile),
+            onPress: () => pickMedia(chooseFile, keyName),
             style: { flex: 1, backgroundColor: "#35373c", padding: 11, borderRadius: 8, marginLeft: 6 }
           }, React.createElement(RN.Text, { style: { color: "#fff", textAlign: "center", fontWeight: "800" } }, "Choose file"))
         ),
-        error ? React.createElement(RN.Text, { style: { color: "#ff7b84", fontSize: 12, marginTop: 7 } }, error) : null,
         uri ? React.createElement(RN.View, { style: { marginTop: 9, backgroundColor: "#1f1f1f", borderRadius: 8, overflow: "hidden" } },
           React.createElement(RN.Image, {
             source: { uri },
@@ -531,12 +528,13 @@
 
     return React.createElement(RN.ScrollView, { style: { flex: 1 }, contentContainerStyle: { padding: 16 } },
       React.createElement(Toggle, { label: "Enabled", sub: "Local-only changes", value: !!storage.enabled, onPress: () => { set("enabled", !storage.enabled); refreshDiscord(); } }),
+      React.createElement(RN.Text, { style: { color: "#fff", fontSize: 16, fontWeight: "900", marginTop: 6, marginBottom: 8 } }, "Profile Media"),
+      mediaField("Profile picture", "avatarMedia", false),
+      mediaField("Profile banner", "bannerMedia", true),
       React.createElement(Toggle, { label: "Replace Mode / Hide Owned", sub: "ON = hides all real owned badges and only shows selected badges", value: !!storage.replaceMode, onPress: () => { set("replaceMode", !storage.replaceMode); refreshDiscord(); } }),
       React.createElement(Toggle, { label: "Nitro / Boost Dates", sub: "72-month Nitro + 24-month boost", value: !!storage.nitroEnabled, onPress: () => { set("nitroEnabled", !storage.nitroEnabled); refreshDiscord(); } }),
       React.createElement(Field, { label: "Display name", keyName: "displayName", placeholder: "Badge Collector" }),
       React.createElement(Field, { label: "Username", keyName: "username", placeholder: "badgecollector" }),
-      React.createElement(MediaField, { label: "Profile picture", keyName: "avatarMedia" }),
-      React.createElement(MediaField, { label: "Profile banner", keyName: "bannerMedia", banner: true }),
       React.createElement(RN.Pressable, { onPress: apply, style: { backgroundColor: "#5865f2", padding: 13, borderRadius: 10, marginBottom: 16 } },
         React.createElement(RN.Text, { style: { color: "#fff", textAlign: "center", fontWeight: "800" } }, "Apply / Refresh")
       ),
