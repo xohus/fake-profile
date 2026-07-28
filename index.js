@@ -8,8 +8,6 @@
   storage.enabled ??= false;
   storage.displayName ??= "Badge Collector";
   storage.username ??= "badgecollector";
-  storage.avatarMedia ??= null;
-  storage.bannerMedia ??= null;
   storage.nitroEnabled ??= true;
   storage.selectedFlags ??= {};
   storage.selectedExtras ??= {};
@@ -549,4 +547,11 @@
   exports.default = index;
   Object.defineProperty(exports, "__esModule", { value: true });
   return exports;
-})({}, bunny.metro, bunny.metro.common, bunny.utils.lazy, bunny.api, vendetta.plugin);
+})(
+  {},
+  typeof bunny !== "undefined" && bunny.metro ? bunny.metro : vendetta.metro,
+  typeof bunny !== "undefined" && bunny.metro?.common ? bunny.metro.common : vendetta.metro.common,
+  typeof bunny !== "undefined" ? bunny.utils?.lazy : undefined,
+  typeof bunny !== "undefined" && bunny.api?.patcher ? bunny.api : vendetta,
+  vendetta.plugin
+);
