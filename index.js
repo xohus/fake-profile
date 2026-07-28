@@ -8,8 +8,6 @@
   storage.enabled ??= false;
   storage.displayName ??= "Badge Collector";
   storage.username ??= "badgecollector";
-  storage.avatarMedia ??= null;
-  storage.bannerMedia ??= null;
   storage.nitroEnabled ??= true;
   storage.selectedFlags ??= {};
   storage.selectedExtras ??= {};
@@ -83,92 +81,6 @@
     const d = new Date();
     d.setMonth(d.getMonth() - months);
     return d;
-  }
-
-  function mediaUri(key) {
-    const value = storage[key];
-    return typeof value === "string" ? value : String(value?.uri || "");
-  }
-
-  function mediaName(key) {
-    const value = storage[key];
-    return typeof value === "object" && value?.name ? value.name : "Selected image";
-  }
-
-  function normalizeAsset(asset) {
-    const item = Array.isArray(asset) ? asset[0] : asset;
-    const uri = item?.fileCopyUri || item?.uri;
-    const type = String(item?.type || "").toLowerCase();
-    const name = String(item?.fileName || item?.name || uri?.split("/").pop() || "Selected image");
-
-    if (!uri) throw new Error("No image was selected.");
-    if (type && !type.startsWith("image/")) throw new Error("Choose a GIF or image file.");
-    if (!type && !/\.(gif|png|jpe?g|webp)(?:$|[?#])/i.test(name) && !/^(file|content|ph):/i.test(uri)) {
-      throw new Error("Choose a GIF, PNG, JPEG, or WebP file.");
-    }
-
-    return { uri, name, type };
-  }
-
-  function saveMedia(key, asset) {
-    storage[key] = normalizeAsset(asset);
-    clearFakeCache();
-    refreshDiscord();
-  }
-
-  async function choosePhoto(key) {
-    let picker;
-    try { picker = metro.findByProps?.("launchImageLibrary"); } catch {}
-    if (!picker?.launchImageLibrary) throw new Error("The photo picker is unavailable in this client.");
-
-    const result = await new Promise((resolve, reject) => {
-      let returned;
-      try {
-        returned = picker.launchImageLibrary({
-          mediaType: "photo",
-          selectionLimit: 1,
-          includeBase64: false,
-          assetRepresentationMode: "current"
-        }, response => {
-          if (response?.didCancel) return resolve(null);
-          if (response?.errorCode) return reject(new Error(response.errorMessage || "The photo picker failed."));
-          resolve(response);
-        });
-      } catch (error) {
-        reject(error);
-        return;
-      }
-
-      if (returned?.then) {
-        returned.then(resolve, reject);
-      }
-    });
-
-    const asset = result?.assets?.[0];
-    if (asset) saveMedia(key, asset);
-    return !!asset;
-  }
-
-  async function chooseFile(key) {
-    let picker;
-    try { picker = metro.findByProps?.("pickSingle"); } catch {}
-    if (!picker?.pickSingle) throw new Error("The file picker is unavailable in this client.");
-
-    try {
-      const asset = await picker.pickSingle({
-        type: ["image/gif", "image/png", "image/jpeg", "image/webp"],
-        copyTo: "cachesDirectory"
-      });
-      if (!asset) return false;
-      saveMedia(key, asset);
-      return true;
-    } catch (error) {
-      const message = String(error?.message || "");
-      if (error?.code === "DOCUMENT_PICKER_CANCELED" || error?.code === "OPERATION_CANCELED" || /cancel/i.test(message)) {
-        return false;
-      }
-      throw error;
-    }
   }
 
   function selectedFlagMask() {
@@ -254,22 +166,6 @@
     setOwnValue(obj, "flags", flags);
     setOwnValue(obj, "badges", extraBadgeObjects(original?.badges ?? obj.badges));
     setOwnValue(obj, "profileBadges", extraBadgeObjects(original?.profileBadges ?? obj.profileBadges));
-
-    const avatar = mediaUri("avatarMedia");
-    const banner = mediaUri("bannerMedia");
-
-    if (avatar) {
-      setOwnValue(obj, "avatarURL", avatar);
-      setOwnValue(obj, "avatarUrl", avatar);
-      setOwnValue(obj, "getAvatarURL", () => avatar);
-    }
-
-    if (banner) {
-      setOwnValue(obj, "banner", banner);
-      setOwnValue(obj, "bannerURL", banner);
-      setOwnValue(obj, "bannerUrl", banner);
-      setOwnValue(obj, "getBannerURL", () => banner);
-    }
 
     if (storage.nitroEnabled) {
       setOwnValue(obj, "premiumType", 2);
@@ -451,53 +347,6 @@
       })
     );
 
-    const pickMedia = async (action, keyName) => {
-      try {
-        if (await action(keyName)) forceUpdate();
-      } catch (error) {
-        try { RN.Alert.alert("FakeProfile", error?.message || "Could not open the picker."); } catch {}
-      }
-    };
-
-    const MediaField = ({ label, keyName, banner }) => {
-      const uri = mediaUri(keyName);
-
-      return React.createElement(RN.View, { style: { marginBottom: 14 } },
-        React.createElement(RN.Text, { style: { color: "#fff", fontSize: 14, fontWeight: "700", marginBottom: 8 } }, label),
-        React.createElement(RN.View, { style: { flexDirection: "row" } },
-          React.createElement(RN.Pressable, {
-            onPress: () => pickMedia(choosePhoto, keyName),
-            style: { flex: 1, backgroundColor: "#5865f2", padding: 11, borderRadius: 8, marginRight: 6 }
-          }, React.createElement(RN.Text, { style: { color: "#fff", textAlign: "center", fontWeight: "800" } }, "Choose photo")),
-          React.createElement(RN.Pressable, {
-            onPress: () => pickMedia(chooseFile, keyName),
-            style: { flex: 1, backgroundColor: "#35373c", padding: 11, borderRadius: 8, marginLeft: 6 }
-          }, React.createElement(RN.Text, { style: { color: "#fff", textAlign: "center", fontWeight: "800" } }, "Choose file"))
-        ),
-        uri ? React.createElement(RN.View, { style: { marginTop: 9, backgroundColor: "#1f1f1f", borderRadius: 8, overflow: "hidden" } },
-          React.createElement(RN.Image, {
-            source: { uri },
-            resizeMode: "cover",
-            style: banner
-              ? { width: "100%", height: 110, backgroundColor: "#111" }
-              : { width: 88, height: 88, borderRadius: 44, alignSelf: "center", marginVertical: 10, backgroundColor: "#111" }
-          }),
-          React.createElement(RN.View, { style: { flexDirection: "row", alignItems: "center", padding: 9 } },
-            React.createElement(RN.Text, { numberOfLines: 1, style: { color: "#ddd", flex: 1, fontSize: 12 } }, mediaName(keyName)),
-            React.createElement(RN.Pressable, {
-              onPress: () => {
-                storage[keyName] = null;
-                clearFakeCache();
-                forceUpdate();
-                refreshDiscord();
-              },
-              style: { backgroundColor: "#4a2024", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6 }
-            }, React.createElement(RN.Text, { style: { color: "#ff7b84", fontWeight: "800", fontSize: 12 } }, "Clear"))
-          )
-        ) : null
-      );
-    };
-
     const toggleFlag = id => {
       storage.selectedFlags = { ...(storage.selectedFlags || {}), [id]: !storage.selectedFlags?.[id] };
       clearFakeCache();
@@ -532,8 +381,6 @@
       React.createElement(Toggle, { label: "Nitro / Boost Dates", sub: "72-month Nitro + 24-month boost", value: !!storage.nitroEnabled, onPress: () => { set("nitroEnabled", !storage.nitroEnabled); refreshDiscord(); } }),
       React.createElement(Field, { label: "Display name", keyName: "displayName", placeholder: "Badge Collector" }),
       React.createElement(Field, { label: "Username", keyName: "username", placeholder: "badgecollector" }),
-      React.createElement(MediaField, { label: "Profile picture", keyName: "avatarMedia" }),
-      React.createElement(MediaField, { label: "Profile banner", keyName: "bannerMedia", banner: true }),
       React.createElement(RN.Pressable, { onPress: apply, style: { backgroundColor: "#5865f2", padding: 13, borderRadius: 10, marginBottom: 16 } },
         React.createElement(RN.Text, { style: { color: "#fff", textAlign: "center", fontWeight: "800" } }, "Apply / Refresh")
       ),
