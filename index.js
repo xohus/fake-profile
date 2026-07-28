@@ -1,4 +1,4 @@
-(function(exports, metro, common, patcher, plugin) {
+(function(exports, metro, common, lazy, api, plugin) {
   "use strict";
 
   const React = common.React;
@@ -8,8 +8,6 @@
   storage.enabled ??= false;
   storage.displayName ??= "Badge Collector";
   storage.username ??= "badgecollector";
-  storage.avatarMedia ??= null;
-  storage.bannerMedia ??= null;
   storage.nitroEnabled ??= true;
   storage.selectedFlags ??= {};
   storage.selectedExtras ??= {};
@@ -83,117 +81,6 @@
     const d = new Date();
     d.setMonth(d.getMonth() - months);
     return d;
-  }
-
-  function mediaValue(key) {
-    const media = storage[key];
-    if (typeof media === "string") return { uri: media };
-    if (media?.uri) return media;
-
-    // Keep previously saved URL-based previews working until the user replaces them.
-    const legacyKey = key === "avatarMedia" ? "avatarUrl" : "bannerUrl";
-    const legacyUri = String(storage[legacyKey] || "").trim();
-    return legacyUri ? { uri: legacyUri } : null;
-  }
-
-  function mediaUri(key) {
-    return String(mediaValue(key)?.uri || "").trim();
-  }
-
-  function isSupportedImage(asset) {
-    const type = String(asset?.type || "").toLowerCase();
-    const name = String(asset?.fileName || asset?.name || asset?.uri || "").toLowerCase();
-    return type.startsWith("image/") || /\.(gif|png|jpe?g|webp)(?:$|[?#])/i.test(name);
-  }
-
-  function savePickedMedia(key, asset) {
-    const uri = asset?.fileCopyUri || asset?.uri;
-    if (!uri || !isSupportedImage(asset)) throw new Error("Choose a GIF, PNG, JPEG, or WebP image.");
-
-    storage[key] = {
-      uri,
-      type: asset.type || "",
-      fileName: asset.fileName || asset.name || uri.split("/").pop() || "Selected image"
-    };
-    delete storage[key === "avatarMedia" ? "avatarUrl" : "bannerUrl"];
-    clearFakeCache();
-    refreshDiscord();
-  }
-
-  function pickFromPhotos(key, onDone, onError) {
-    const ImagePicker = metro.findByProps?.("launchImageLibrary");
-    if (!ImagePicker?.launchImageLibrary) {
-      onError("The system photo picker is unavailable in this client build.");
-      return;
-    }
-
-    try {
-      ImagePicker.launchImageLibrary({
-        mediaType: "photo",
-        selectionLimit: 1,
-        includeBase64: false
-      }, result => {
-        if (result?.didCancel) return;
-        if (result?.errorCode) {
-          onError(result.errorMessage || "The system photo picker could not open.");
-          return;
-        }
-
-        const asset = result?.assets?.[0];
-        if (!asset) return;
-        try {
-          savePickedMedia(key, asset);
-          onDone();
-        } catch (error) {
-          onError(error?.message || "That image could not be used.");
-        }
-      });
-    } catch (error) {
-      onError(error?.message || "The system photo picker could not open.");
-    }
-  }
-
-  async function pickFromFiles(key, onDone, onError) {
-    try {
-      const DocumentPicker = metro.findByProps?.("pickSingle", "isCancel");
-      if (DocumentPicker?.pickSingle) {
-        const asset = await DocumentPicker.pickSingle({
-          type: ["image/gif", "image/png", "image/jpeg", "image/webp"],
-          copyTo: "cachesDirectory"
-        });
-        savePickedMedia(key, asset);
-        onDone();
-        return;
-      }
-
-      const Documents = metro.findByProps?.("pick", "saveDocuments");
-      if (Documents?.pick) {
-        const result = await Documents.pick({
-          type: ["image/*"],
-          allowMultiSelection: false
-        });
-        const asset = Array.isArray(result) ? result[0] : result;
-        if (!asset) return;
-        savePickedMedia(key, asset);
-        onDone();
-        return;
-      }
-
-      onError("The system file picker is unavailable in this client build.");
-    } catch (error) {
-      const cancelled = error?.code === "DOCUMENT_PICKER_CANCELED" || error?.code === "OPERATION_CANCELED" || /cancel/i.test(String(error?.message || ""));
-      if (!cancelled) onError(error?.message || "The system file picker could not open.");
-    }
-  }
-
-  function isCurrentUser(user) {
-    if (!user) return false;
-    try {
-      const userId = typeof user === "string" ? user : user.id;
-      return !!myId && !!userId && userId === myId;
-    } catch {
-      return false;
-    }
   }
 
   function selectedFlagMask() {
@@ -280,22 +167,6 @@
     setOwnValue(obj, "badges", extraBadgeObjects(original?.badges ?? obj.badges));
     setOwnValue(obj, "profileBadges", extraBadgeObjects(original?.profileBadges ?? obj.profileBadges));
 
-    const avatarUrl = mediaUri("avatarMedia");
-    const bannerUrl = mediaUri("bannerMedia");
-
-    if (avatarUrl) {
-      setOwnValue(obj, "avatarURL", avatarUrl);
-      setOwnValue(obj, "avatarUrl", avatarUrl);
-      setOwnValue(obj, "getAvatarURL", () => avatarUrl);
-    }
-
-    if (bannerUrl) {
-      setOwnValue(obj, "banner", bannerUrl);
-      setOwnValue(obj, "bannerURL", bannerUrl);
-      setOwnValue(obj, "bannerUrl", bannerUrl);
-      setOwnValue(obj, "getBannerURL", () => bannerUrl);
-    }
-
     if (storage.nitroEnabled) {
       setOwnValue(obj, "premiumType", 2);
       setOwnValue(obj, "premiumSince", oldDate(72));
@@ -370,7 +241,7 @@
 
       try {
         if (UserStore.getCurrentUser) {
-          unpatches.push(patcher.instead("getCurrentUser", UserStore, (a, o) => {
+          unpatches.push(api.patcher.instead("getCurrentUser", UserStore, (a, o) => {
             const user = o(...a);
             try { myId = user?.id || myId; } catch {}
             return cloneUser(user);
@@ -380,7 +251,7 @@
 
       try {
         if (UserStore.getUser) {
-          unpatches.push(patcher.instead("getUser", UserStore, (a, o) => {
+          unpatches.push(api.patcher.instead("getUser", UserStore, (a, o) => {
             const wantedId = a?.[0];
 
             if (wantedId && myId && wantedId !== myId) return o(...a);
@@ -397,7 +268,7 @@
     if (ProfileStore) {
       try {
         if (ProfileStore.getUserProfile) {
-          unpatches.push(patcher.instead("getUserProfile", ProfileStore, (a, o) => {
+          unpatches.push(api.patcher.instead("getUserProfile", ProfileStore, (a, o) => {
             const userId = a?.[0];
 
             if (userId && myId && userId !== myId) return o(...a);
@@ -410,7 +281,7 @@
 
       try {
         if (ProfileStore.getGuildMemberProfile) {
-          unpatches.push(patcher.instead("getGuildMemberProfile", ProfileStore, (a, o) => {
+          unpatches.push(api.patcher.instead("getGuildMemberProfile", ProfileStore, (a, o) => {
             const userId = a?.[0];
 
             if (userId && myId && userId !== myId) return o(...a);
@@ -421,28 +292,6 @@
         }
       } catch {}
     }
-
-    const IconUtils = metro.findByProps?.("getUserAvatarURL");
-
-    try {
-      if (IconUtils?.getUserAvatarURL) {
-        unpatches.push(patcher.instead("getUserAvatarURL", IconUtils, (a, o) => {
-          const avatarUrl = mediaUri("avatarMedia");
-          return storage.enabled && avatarUrl && isCurrentUser(a?.[0]) ? avatarUrl : o(...a);
-        }));
-      }
-    } catch {}
-
-    const BannerUtils = metro.findByProps?.("getUserBannerURL");
-
-    try {
-      if (BannerUtils?.getUserBannerURL) {
-        unpatches.push(patcher.instead("getUserBannerURL", BannerUtils, (a, o) => {
-          const bannerUrl = mediaUri("bannerMedia");
-          return storage.enabled && bannerUrl && isCurrentUser(a?.[0]) ? bannerUrl : o(...a);
-        }));
-      }
-    } catch {}
   }
 
   function refreshDiscord() {
@@ -498,66 +347,6 @@
       })
     );
 
-    const MediaField = ({ label, keyName, banner = false }) => {
-      const [error, setError] = React.useState("");
-      const media = mediaValue(keyName);
-      const previewUri = mediaUri(keyName);
-      const displayName = String(media?.fileName || "Selected image");
-      const isGif = String(media?.type || "").toLowerCase() === "image/gif" || /\.gif(?:$|[?#])/i.test(displayName) || /\.gif(?:$|[?#])/i.test(previewUri);
-      const selected = !!previewUri;
-      const done = () => {
-        setError("");
-        forceUpdate();
-      };
-
-      return React.createElement(RN.View, { style: { marginBottom: 16 } },
-        React.createElement(RN.Text, { style: { color: "#fff", fontSize: 14, fontWeight: "800", marginBottom: 4 } }, label),
-        React.createElement(RN.Text, { style: { color: "#aaa", fontSize: 12, lineHeight: 17, marginBottom: 8 } },
-          "Choose a GIF or image from Photos/Gallery or Files. It stays in this local fake-profile preview."
-        ),
-        React.createElement(RN.View, { style: { flexDirection: "row", gap: 8 } },
-          React.createElement(RN.Pressable, {
-            onPress: () => pickFromPhotos(keyName, done, setError),
-            style: { flex: 1, backgroundColor: "#5865f2", padding: 12, borderRadius: 8 }
-          }, React.createElement(RN.Text, { style: { color: "#fff", textAlign: "center", fontSize: 13, fontWeight: "800" } }, "Choose photo / GIF")),
-          React.createElement(RN.Pressable, {
-            onPress: () => pickFromFiles(keyName, done, setError),
-            style: { flex: 1, backgroundColor: "#35373c", padding: 12, borderRadius: 8, borderWidth: 1, borderColor: "#4e5058" }
-          }, React.createElement(RN.Text, { style: { color: "#fff", textAlign: "center", fontSize: 13, fontWeight: "800" } }, "Choose file"))
-        ),
-        error ? React.createElement(RN.Text, { style: { color: "#ff7b84", fontSize: 12, marginTop: 8 } }, error) : null,
-        selected ? React.createElement(RN.View, {
-          style: { marginTop: 10, borderRadius: 12, overflow: "hidden", borderWidth: 1, borderColor: "#3a3a3a", backgroundColor: "#171717" }
-        },
-          React.createElement(RN.Image, {
-            source: { uri: previewUri },
-            resizeMode: "cover",
-            style: banner
-              ? { width: "100%", height: 120, backgroundColor: "#111" }
-              : { width: 96, height: 96, borderRadius: 48, alignSelf: "center", marginVertical: 12, backgroundColor: "#111" }
-          }),
-          React.createElement(RN.View, {
-            style: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 10, paddingVertical: 8, backgroundColor: "#202020" }
-          },
-            React.createElement(RN.View, { style: { flex: 1, marginRight: 8 } },
-              React.createElement(RN.Text, { numberOfLines: 1, style: { color: "#fff", fontSize: 12, fontWeight: "800" } }, displayName),
-              React.createElement(RN.Text, { style: { color: isGif ? "#57f287" : "#b5bac1", fontSize: 11, marginTop: 2, fontWeight: "700" } }, isGif ? "ANIMATED GIF" : "IMAGE PREVIEW")
-            ),
-            React.createElement(RN.Pressable, {
-              onPress: () => {
-                storage[keyName] = null;
-                delete storage[keyName === "avatarMedia" ? "avatarUrl" : "bannerUrl"];
-                clearFakeCache();
-                forceUpdate();
-                refreshDiscord();
-              },
-              style: { backgroundColor: "#4a2024", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6 }
-            }, React.createElement(RN.Text, { style: { color: "#ff7b84", fontSize: 12, fontWeight: "800" } }, "Clear"))
-          )
-        ) : null
-      );
-    };
-
     const toggleFlag = id => {
       storage.selectedFlags = { ...(storage.selectedFlags || {}), [id]: !storage.selectedFlags?.[id] };
       clearFakeCache();
@@ -592,8 +381,6 @@
       React.createElement(Toggle, { label: "Nitro / Boost Dates", sub: "72-month Nitro + 24-month boost", value: !!storage.nitroEnabled, onPress: () => { set("nitroEnabled", !storage.nitroEnabled); refreshDiscord(); } }),
       React.createElement(Field, { label: "Display name", keyName: "displayName", placeholder: "Badge Collector" }),
       React.createElement(Field, { label: "Username", keyName: "username", placeholder: "badgecollector" }),
-      React.createElement(MediaField, { label: "Profile picture", keyName: "avatarMedia" }),
-      React.createElement(MediaField, { label: "Profile banner", keyName: "bannerMedia", banner: true }),
       React.createElement(RN.Pressable, { onPress: apply, style: { backgroundColor: "#5865f2", padding: 13, borderRadius: 10, marginBottom: 16 } },
         React.createElement(RN.Text, { style: { color: "#fff", textAlign: "center", fontWeight: "800" } }, "Apply / Refresh")
       ),
@@ -630,4 +417,4 @@
   exports.default = index;
   Object.defineProperty(exports, "__esModule", { value: true });
   return exports;
-})({}, vendetta.metro, vendetta.metro.common, vendetta.patcher, vendetta.plugin);
+})({}, bunny.metro, bunny.metro.common, bunny.utils.lazy, bunny.api, vendetta.plugin);
