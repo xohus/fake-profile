@@ -459,7 +459,7 @@
       }
     };
 
-    const mediaField = (label, keyName, banner) => {
+    const MediaField = ({ label, keyName, banner }) => {
       const uri = mediaUri(keyName);
 
       return React.createElement(RN.View, { style: { marginBottom: 14 } },
@@ -528,13 +528,12 @@
 
     return React.createElement(RN.ScrollView, { style: { flex: 1 }, contentContainerStyle: { padding: 16 } },
       React.createElement(Toggle, { label: "Enabled", sub: "Local-only changes", value: !!storage.enabled, onPress: () => { set("enabled", !storage.enabled); refreshDiscord(); } }),
-      React.createElement(RN.Text, { style: { color: "#fff", fontSize: 16, fontWeight: "900", marginTop: 6, marginBottom: 8 } }, "Profile Media"),
-      mediaField("Profile picture", "avatarMedia", false),
-      mediaField("Profile banner", "bannerMedia", true),
       React.createElement(Toggle, { label: "Replace Mode / Hide Owned", sub: "ON = hides all real owned badges and only shows selected badges", value: !!storage.replaceMode, onPress: () => { set("replaceMode", !storage.replaceMode); refreshDiscord(); } }),
       React.createElement(Toggle, { label: "Nitro / Boost Dates", sub: "72-month Nitro + 24-month boost", value: !!storage.nitroEnabled, onPress: () => { set("nitroEnabled", !storage.nitroEnabled); refreshDiscord(); } }),
       React.createElement(Field, { label: "Display name", keyName: "displayName", placeholder: "Badge Collector" }),
       React.createElement(Field, { label: "Username", keyName: "username", placeholder: "badgecollector" }),
+      React.createElement(MediaField, { label: "Profile picture", keyName: "avatarMedia" }),
+      React.createElement(MediaField, { label: "Profile banner", keyName: "bannerMedia", banner: true }),
       React.createElement(RN.Pressable, { onPress: apply, style: { backgroundColor: "#5865f2", padding: 13, borderRadius: 10, marginBottom: 16 } },
         React.createElement(RN.Text, { style: { color: "#fff", textAlign: "center", fontWeight: "800" } }, "Apply / Refresh")
       ),
