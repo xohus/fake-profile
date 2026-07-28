@@ -1,4 +1,4 @@
-(function(exports, metro, common, lazy, api, plugin) {
+(function(exports, metro, common, patcher, plugin) {
   "use strict";
 
   const React = common.React;
@@ -370,7 +370,7 @@
 
       try {
         if (UserStore.getCurrentUser) {
-          unpatches.push(api.patcher.instead("getCurrentUser", UserStore, (a, o) => {
+          unpatches.push(patcher.instead("getCurrentUser", UserStore, (a, o) => {
             const user = o(...a);
             try { myId = user?.id || myId; } catch {}
             return cloneUser(user);
@@ -380,7 +380,7 @@
 
       try {
         if (UserStore.getUser) {
-          unpatches.push(api.patcher.instead("getUser", UserStore, (a, o) => {
+          unpatches.push(patcher.instead("getUser", UserStore, (a, o) => {
             const wantedId = a?.[0];
 
             if (wantedId && myId && wantedId !== myId) return o(...a);
@@ -397,7 +397,7 @@
     if (ProfileStore) {
       try {
         if (ProfileStore.getUserProfile) {
-          unpatches.push(api.patcher.instead("getUserProfile", ProfileStore, (a, o) => {
+          unpatches.push(patcher.instead("getUserProfile", ProfileStore, (a, o) => {
             const userId = a?.[0];
 
             if (userId && myId && userId !== myId) return o(...a);
@@ -410,7 +410,7 @@
 
       try {
         if (ProfileStore.getGuildMemberProfile) {
-          unpatches.push(api.patcher.instead("getGuildMemberProfile", ProfileStore, (a, o) => {
+          unpatches.push(patcher.instead("getGuildMemberProfile", ProfileStore, (a, o) => {
             const userId = a?.[0];
 
             if (userId && myId && userId !== myId) return o(...a);
@@ -426,7 +426,7 @@
 
     try {
       if (IconUtils?.getUserAvatarURL) {
-        unpatches.push(api.patcher.instead("getUserAvatarURL", IconUtils, (a, o) => {
+        unpatches.push(patcher.instead("getUserAvatarURL", IconUtils, (a, o) => {
           const avatarUrl = mediaUri("avatarMedia");
           return storage.enabled && avatarUrl && isCurrentUser(a?.[0]) ? avatarUrl : o(...a);
         }));
@@ -437,7 +437,7 @@
 
     try {
       if (BannerUtils?.getUserBannerURL) {
-        unpatches.push(api.patcher.instead("getUserBannerURL", BannerUtils, (a, o) => {
+        unpatches.push(patcher.instead("getUserBannerURL", BannerUtils, (a, o) => {
           const bannerUrl = mediaUri("bannerMedia");
           return storage.enabled && bannerUrl && isCurrentUser(a?.[0]) ? bannerUrl : o(...a);
         }));
@@ -630,4 +630,4 @@
   exports.default = index;
   Object.defineProperty(exports, "__esModule", { value: true });
   return exports;
-})({}, bunny.metro, bunny.metro.common, bunny.utils.lazy, bunny.api, vendetta.plugin);
+})({}, vendetta.metro, vendetta.metro.common, vendetta.patcher, vendetta.plugin);
