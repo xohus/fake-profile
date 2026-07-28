@@ -8,6 +8,8 @@
   storage.enabled ??= false;
   storage.displayName ??= "Badge Collector";
   storage.username ??= "badgecollector";
+  storage.avatarMedia ??= null;
+  storage.bannerMedia ??= null;
   storage.nitroEnabled ??= true;
   storage.selectedFlags ??= {};
   storage.selectedExtras ??= {};
@@ -81,6 +83,72 @@
     const d = new Date();
     d.setMonth(d.getMonth() - months);
     return d;
+  }
+
+  function mediaUri(key) {
+    return String(storage[key]?.uri || "");
+  }
+
+  function saveMedia(key, asset) {
+    const uri = asset?.fileCopyUri || asset?.uri;
+    const name = String(asset?.fileName || asset?.name || "Selected image");
+    const type = String(asset?.type || "").toLowerCase();
+
+    if (!uri) throw new Error("No image was selected.");
+    if (type && !type.startsWith("image/")) throw new Error("Choose an image or GIF.");
+
+    storage[key] = { uri, name, type };
+    clearFakeCache();
+    refreshDiscord();
+  }
+
+  async function pickFile(key) {
+    let picker;
+    try { picker = metro.findByProps?.("pickSingle", "isCancel"); } catch {}
+    if (!picker?.pickSingle) throw new Error("The system file picker is unavailable.");
+
+    try {
+      const asset = await picker.pickSingle({
+        type: picker.types?.images || "image/*",
+        mode: "import",
+        copyTo: "documentDirectory"
+      });
+      if (!asset) return false;
+      saveMedia(key, asset);
+      return true;
+    } catch (error) {
+      if (picker.isCancel?.(error)) return false;
+      throw error;
+    }
+  }
+
+  async function pickPhoto(key) {
+    let picker;
+    try { picker = metro.findByProps?.("launchImageLibrary"); } catch {}
+    if (!picker?.launchImageLibrary) return pickFile(key);
+
+    const result = await new Promise((resolve, reject) => {
+      let returned;
+      try {
+        returned = picker.launchImageLibrary({
+          mediaType: "photo",
+          selectionLimit: 1,
+          includeBase64: false,
+          assetRepresentationMode: "current"
+        }, resolve);
+      } catch (error) {
+        reject(error);
+        return;
+      }
+      if (returned?.then) returned.then(resolve, reject);
+    });
+    if (result?.didCancel) return false;
+    if (result?.errorCode) throw new Error(result.errorMessage || "The photo picker failed.");
+
+    const asset = result?.assets?.[0];
+    if (!asset) return false;
+    saveMedia(key, asset);
+    return true;
   }
 
   function selectedFlagMask() {
@@ -166,6 +234,22 @@
     setOwnValue(obj, "flags", flags);
     setOwnValue(obj, "badges", extraBadgeObjects(original?.badges ?? obj.badges));
     setOwnValue(obj, "profileBadges", extraBadgeObjects(original?.profileBadges ?? obj.profileBadges));
+
+    const avatar = mediaUri("avatarMedia");
+    const banner = mediaUri("bannerMedia");
+
+    if (avatar) {
+      setOwnValue(obj, "avatarURL", avatar);
+      setOwnValue(obj, "avatarUrl", avatar);
+      setOwnValue(obj, "getAvatarURL", () => avatar);
+    }
+
+    if (banner) {
+      setOwnValue(obj, "banner", banner);
+      setOwnValue(obj, "bannerURL", banner);
+      setOwnValue(obj, "bannerUrl", banner);
+      setOwnValue(obj, "getBannerURL", () => banner);
+    }
 
     if (storage.nitroEnabled) {
       setOwnValue(obj, "premiumType", 2);
@@ -347,6 +431,52 @@
       })
     );
 
+    const MediaField = ({ label, keyName, banner }) => {
+      const uri = mediaUri(keyName);
+      const choose = async picker => {
+        try {
+          if (await picker(keyName)) forceUpdate();
+        } catch (error) {
+          try { RN.Alert.alert("FakeProfile", error?.message || "Could not open the picker."); } catch {}
+        }
+      };
+
+      return React.createElement(RN.View, { style: { marginBottom: 14 } },
+        React.createElement(RN.Text, { style: { color: "#fff", fontSize: 14, fontWeight: "700", marginBottom: 8 } }, label),
+        React.createElement(RN.View, { style: { flexDirection: "row" } },
+          React.createElement(RN.Pressable, {
+            onPress: () => choose(pickPhoto),
+            style: { flex: 1, backgroundColor: "#5865f2", padding: 11, borderRadius: 8, marginRight: 6 }
+          }, React.createElement(RN.Text, { style: { color: "#fff", textAlign: "center", fontWeight: "800" } }, "Choose picture")),
+          React.createElement(RN.Pressable, {
+            onPress: () => choose(pickFile),
+            style: { flex: 1, backgroundColor: "#35373c", padding: 11, borderRadius: 8, marginLeft: 6 }
+          }, React.createElement(RN.Text, { style: { color: "#fff", textAlign: "center", fontWeight: "800" } }, "Choose file"))
+        ),
+        uri ? React.createElement(RN.View, { style: { marginTop: 9, backgroundColor: "#1f1f1f", borderRadius: 8, overflow: "hidden" } },
+          React.createElement(RN.Image, {
+            source: { uri },
+            resizeMode: "cover",
+            style: banner
+              ? { width: "100%", height: 110, backgroundColor: "#111" }
+              : { width: 88, height: 88, borderRadius: 44, alignSelf: "center", marginVertical: 10, backgroundColor: "#111" }
+          }),
+          React.createElement(RN.View, { style: { flexDirection: "row", alignItems: "center", padding: 9 } },
+            React.createElement(RN.Text, { numberOfLines: 1, style: { color: "#ddd", flex: 1, fontSize: 12 } }, storage[keyName]?.name || "Selected image"),
+            React.createElement(RN.Pressable, {
+              onPress: () => {
+                storage[keyName] = null;
+                clearFakeCache();
+                forceUpdate();
+                refreshDiscord();
+              },
+              style: { backgroundColor: "#4a2024", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6 }
+            }, React.createElement(RN.Text, { style: { color: "#ff7b84", fontWeight: "800", fontSize: 12 } }, "Clear"))
+          )
+        ) : null
+      );
+    };
+
     const toggleFlag = id => {
       storage.selectedFlags = { ...(storage.selectedFlags || {}), [id]: !storage.selectedFlags?.[id] };
       clearFakeCache();
@@ -381,6 +511,8 @@
       React.createElement(Toggle, { label: "Nitro / Boost Dates", sub: "72-month Nitro + 24-month boost", value: !!storage.nitroEnabled, onPress: () => { set("nitroEnabled", !storage.nitroEnabled); refreshDiscord(); } }),
       React.createElement(Field, { label: "Display name", keyName: "displayName", placeholder: "Badge Collector" }),
       React.createElement(Field, { label: "Username", keyName: "username", placeholder: "badgecollector" }),
+      React.createElement(MediaField, { label: "Profile picture", keyName: "avatarMedia" }),
+      React.createElement(MediaField, { label: "Profile banner", keyName: "bannerMedia", banner: true }),
       React.createElement(RN.Pressable, { onPress: apply, style: { backgroundColor: "#5865f2", padding: 13, borderRadius: 10, marginBottom: 16 } },
         React.createElement(RN.Text, { style: { color: "#fff", textAlign: "center", fontWeight: "800" } }, "Apply / Refresh")
       ),
