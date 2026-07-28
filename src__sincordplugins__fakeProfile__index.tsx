@@ -317,26 +317,20 @@ function SaveIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fil
 function Field({ label, value, placeholder, onChange, type = "text" }: { label: string; value: string; placeholder?: string; onChange: (v: string) => void; type?: string; }) {
     return <div className="cp-field"><div className="cp-section-label">{label}</div><input className="cp-input" type={type} value={value} placeholder={placeholder} onChange={e => onChange(e.target.value)} /></div>;
 }
-function ImageUpload({ label, value, onChange, banner = false }: { label: string; value: string; onChange: (v: string) => void; banner?: boolean; }) {
+function ImageUpload({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void; }) {
     const fileRef = React.useRef<HTMLInputElement>(null);
-    const [error, setError] = React.useState("");
     function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
         const file = e.target.files?.[0]; if (!file) return;
-        if (!["image/gif", "image/png", "image/jpeg", "image/webp"].includes(file.type)) {
-            setError("Choose a GIF, PNG, JPEG, or WebP image."); return;
-        }
-        setError("");
         const reader = new FileReader();
         reader.onload = ev => { if (ev.target?.result) onChange(ev.target.result as string); };
         reader.readAsDataURL(file);
     }
     return (<div className="cp-field"><div className="cp-section-label">{label}</div><div className="cp-image-row">
-        <button className="cp-file-btn" onClick={() => fileRef.current?.click()} title="Choose an image or GIF"><FolderIcon /><span>Choose image / GIF</span></button>
-        <input ref={fileRef} type="file" accept="image/gif,image/png,image/jpeg,image/webp" style={{ display: "none" }} onChange={handleFile} />
-        {value && <><img src={value} alt={`${label} preview`} className={banner ? "cp-preview-banner" : "cp-preview-avatar"} /><button className="cp-clear-btn" onClick={() => onChange("")} title="Remove"><CloseIcon /></button></>}
-    </div>
-        <div className={error ? "cp-media-message cp-media-error" : "cp-media-message"}>{error || "GIFs animate in this local preview; nothing is uploaded to Discord."}</div>
-    </div>);
+        <input className="cp-input" placeholder="Image URL..." value={value.startsWith("data:") ? "" : value} onChange={e => onChange(e.target.value)} />
+        <button className="cp-file-btn" onClick={() => fileRef.current?.click()} title="Choose a file"><FolderIcon /></button>
+        <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleFile} />
+        {value && <><img src={value} alt="" className="cp-preview-avatar" /><button className="cp-clear-btn" onClick={() => onChange("")} title="Remove"><CloseIcon /></button></>}
+    </div></div>);
 }
 function Toggle({ label, checked, onChange, sublabel }: { label: string; checked: boolean; onChange: (v: boolean) => void; sublabel?: string; }) {
     return (<div className="cp-toggle-row" onClick={() => onChange(!checked)}>
@@ -452,7 +446,7 @@ function CustomProfileModal({ rootProps }: { rootProps: any; }) {
             <Field label="Display Name" value={data.globalName ?? ""} placeholder="My Name" onChange={v => set("globalName", v)} />
             <ImageUpload label="Profile Picture" value={data.avatar ?? ""} onChange={v => set("avatar", v)} />
             <Toggle label="Simulate Nitro" sublabel="Enables banner and profile color" checked={data.nitro ?? false} onChange={v => set("nitro", v)} />
-            {data.nitro && <ImageUpload label="Banner" value={data.banner ?? ""} onChange={v => set("banner", v)} banner />}
+            {data.nitro && <ImageUpload label="Banner" value={data.banner ?? ""} onChange={v => set("banner", v)} />}
             <div className="cp-divider" />
             <Field label="Bio" value={data.bio ?? ""} placeholder="My description..." onChange={v => set("bio", v)} />
             <Field label="Pronouns" value={data.pronouns ?? ""} placeholder="he/him" onChange={v => set("pronouns", v)} />

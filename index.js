@@ -1,22 +1,13 @@
-(() => {
+(function(exports, metro, common, lazy, api, plugin) {
   "use strict";
 
-  const metro = bunny.metro;
-  const common = metro.common;
-  const lazy = bunny.utils.lazy;
-  const api = bunny.api;
   const React = common.React;
   const RN = common.ReactNative;
-  const pluginApi = bunny.plugin ?? (typeof vendetta !== "undefined" ? vendetta.plugin : null);
-  const storage = typeof pluginApi?.createStorage === "function"
-    ? pluginApi.createStorage()
-    : pluginApi?.storage;
-
-  if (!storage) throw new Error("FakeProfile could not open plugin storage");
+  const storage = plugin.storage;
 
   storage.enabled ??= false;
-  storage.displayName ??= "Fake Profile";
-  storage.username ??= "fakeprofile";
+  storage.displayName ??= "Badge Collector";
+  storage.username ??= "badgecollector";
   storage.avatarMedia ??= null;
   storage.bannerMedia ??= null;
   storage.nitroEnabled ??= true;
@@ -431,8 +422,7 @@
       } catch {}
     }
 
-    const IconUtils = metro.findByProps?.("getUserAvatarURL", "getUserAvatarSource")
-      || metro.findByProps?.("getUserAvatarURL");
+    const IconUtils = metro.findByProps?.("getUserAvatarURL");
 
     try {
       if (IconUtils?.getUserAvatarURL) {
@@ -443,17 +433,7 @@
       }
     } catch {}
 
-    try {
-      if (IconUtils?.getUserAvatarSource) {
-        unpatches.push(api.patcher.instead("getUserAvatarSource", IconUtils, (a, o) => {
-          const avatarUrl = mediaUri("avatarMedia");
-          return storage.enabled && avatarUrl && isCurrentUser(a?.[0]) ? { uri: avatarUrl } : o(...a);
-        }));
-      }
-    } catch {}
-
-    const BannerUtils = metro.findByProps?.("default", "getUserBannerURL")
-      || metro.findByProps?.("getUserBannerURL");
+    const BannerUtils = metro.findByProps?.("getUserBannerURL");
 
     try {
       if (BannerUtils?.getUserBannerURL) {
@@ -463,7 +443,6 @@
         }));
       }
     } catch {}
-
   }
 
   function refreshDiscord() {
@@ -520,7 +499,7 @@
     );
 
     const MediaField = ({ label, keyName, banner = false }) => {
-      const [error, setError] = React.useReducer((_current, next) => next, "");
+      const [error, setError] = React.useState("");
       const media = mediaValue(keyName);
       const previewUri = mediaUri(keyName);
       const displayName = String(media?.fileName || "Selected image");
@@ -611,8 +590,8 @@
       React.createElement(Toggle, { label: "Enabled", sub: "Local-only changes", value: !!storage.enabled, onPress: () => { set("enabled", !storage.enabled); refreshDiscord(); } }),
       React.createElement(Toggle, { label: "Replace Mode / Hide Owned", sub: "ON = hides all real owned badges and only shows selected badges", value: !!storage.replaceMode, onPress: () => { set("replaceMode", !storage.replaceMode); refreshDiscord(); } }),
       React.createElement(Toggle, { label: "Nitro / Boost Dates", sub: "72-month Nitro + 24-month boost", value: !!storage.nitroEnabled, onPress: () => { set("nitroEnabled", !storage.nitroEnabled); refreshDiscord(); } }),
-      React.createElement(Field, { label: "Display name", keyName: "displayName", placeholder: "Fake Profile" }),
-      React.createElement(Field, { label: "Username", keyName: "username", placeholder: "fakeprofile" }),
+      React.createElement(Field, { label: "Display name", keyName: "displayName", placeholder: "Badge Collector" }),
+      React.createElement(Field, { label: "Username", keyName: "username", placeholder: "badgecollector" }),
       React.createElement(MediaField, { label: "Profile picture", keyName: "avatarMedia" }),
       React.createElement(MediaField, { label: "Profile banner", keyName: "bannerMedia", banner: true }),
       React.createElement(RN.Pressable, { onPress: apply, style: { backgroundColor: "#5865f2", padding: 13, borderRadius: 10, marginBottom: 16 } },
@@ -631,34 +610,24 @@
       React.createElement(RN.Text, { style: { color: "#fff", fontSize: 16, fontWeight: "900", marginTop: 14, marginBottom: 8 } }, "Remove Owned Nitro / Extra Icons"),
       ...EXTRA_BADGES.map(([id, label]) => React.createElement(Toggle, { key: "hide-extra-" + id, label: "Hide " + label, value: !!storage.hiddenExtras?.[id], onPress: () => toggleHiddenExtra(id) })),
 
-      React.createElement(RN.Text, { style: { color: "#aaa", marginTop: 12, lineHeight: 18 } }, "Everything here changes only the local preview. No Discord account or profile data is uploaded or edited. Tap Apply / Refresh after editing.")
+      React.createElement(RN.Text, { style: { color: "#aaa", marginTop: 12, lineHeight: 18 } }, "Typing is saved without refreshing every letter now. Tap Apply / Refresh after editing text. Restart Discord if badges do not refresh instantly.")
     );
   }
 
-  function start() {
-    try {
+  const index = {
+    onLoad() {
       patchStores();
-    } catch (error) {
-      console.error("[FakeProfile] Some preview hooks are unavailable in this Discord build:", error);
-    }
-  }
-
-  function stop() {
-    for (const unpatch of unpatches) try { unpatch?.(); } catch {}
-    unpatches = [];
-    clearFakeCache();
-    refreshDiscord();
-  }
-
-  const instance = {
-    start,
-    stop,
-    SettingsComponent: Settings,
-    onLoad: start,
-    onUnload: stop,
+    },
+    onUnload() {
+      for (const unpatch of unpatches) try { unpatch?.(); } catch {}
+      unpatches = [];
+      clearFakeCache();
+      refreshDiscord();
+    },
     settings: Settings
   };
 
-  instance.default = instance;
-  return instance;
-})();
+  exports.default = index;
+  Object.defineProperty(exports, "__esModule", { value: true });
+  return exports;
+})({}, bunny.metro, bunny.metro.common, bunny.utils.lazy, bunny.api, vendetta.plugin);

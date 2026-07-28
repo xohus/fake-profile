@@ -1,14 +1,1 @@
-{
-  "name": "FakeProfile",
-  "description": "Preview a custom profile locally with image or GIF avatars and banners.",
-  "authors": [
-    {
-      "name": "xohus"
-    }
-  ],
-  "main": "index.js",
-  "vendetta": {
-    "icon": "ic_profile_24px"
-  },
-  "hash": "d29de384423d3887953b4b14053e2c3a03eb5d1e1c2df200c4a6dc99bfa7cdca"
-}
+{"name":"FakeProfile","description":"Larp and change your profile icons..","authors":[{"name":"xohus"}],"main":"index.js","vendetta":{"icon":"ic_profile_24px"},"hash":"b8f59fffdb11de4da48e7a160698bd180b09eed46b6ba99fa56cbe7ea830be1e"}
